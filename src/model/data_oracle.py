@@ -53,6 +53,9 @@ class DataOracle:
                 transition = (current_state, action, reward, next_state)
                 transitions.append(transition)
                 
+                if done:
+                    break
+                
                 current_state = next_state
                 
             trajectories.append({'initial_state': initial_state,
