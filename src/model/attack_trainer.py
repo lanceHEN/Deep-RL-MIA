@@ -10,17 +10,39 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from pytorch_tcn import TCN
+from torchvision.models import resnet18
 
 
-class AttackTrainer(ABC):
+class AttackTrainer(ABC, nn.Module):
     """
     An abstracted version of attack trainers for individual or collective modes
     to de-duplicate common code between them. The individual and collective
     modes should each extend this.
+
+    Note we extend nn.Module here to make the forward method a required
+    abstract method. This way, we ensure implementations have some classification
+    method implemented during the de-duplicated training step. Nevertheless,
+    the main function of these classes is for training--implementations should
+    define separate classes for their respective models themselves.
+
+    Attributes:
+        action_dim (int): Dimension of action space.
+        T_max (int): Max trajectory length.
+        bce (nn.BCELoss): BCE Loss.
+        optimizer (torch.optim.Adam): Adam optimizer.
+        scheduler (torch.optim.lr_scheduler.StepLR): LR scheduler to decay LR
+            every scheduler_steps.
+        grad_clip (float): Threshold value for gradient clipping.
     """
 
     def __init__(
-        self, action_dim: int, T_max: int, classification_threshold: float = 0.5
+        self,
+        action_dim: int,
+        T_max: int,
+        lr: float,
+        grad_clip: float = 0.35,
+        scheduler_step=100,
+        scheduler_decay=0.1,
     ):
         """
         Initializes an AttackTrainer with the given action dimension, max
@@ -33,10 +55,15 @@ class AttackTrainer(ABC):
                 positive classification.
         """
         self.action_dim = action_dim
-        self.classification_threshold = classification_threshold
-        self.classifier = None
+        self.T_max = T_max
 
-    @abstractmethod
+        self.bce = nn.BCELoss()
+        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer, scheduler_step, gamma=scheduler_decay
+        )
+        self.grad_clip = grad_clip
+
     def train(
         self,
         stacked_trajectories: torch.Tensor,
@@ -58,11 +85,31 @@ class AttackTrainer(ABC):
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
-        pass
+        train_loader = self._make_dataloader(
+            stacked_trajectories, train_labels, batch_size
+        )
 
-    @property
-    def classifier(self):
-        return self.classifier
+        self.train()
+
+        for _ in range(epochs):
+            for inputs, labels in train_loader:
+                self.optimizer.zero_grad()
+
+                out = self(inputs)
+
+                loss = self.bce(out, labels)
+
+                loss.backward()
+                # Gradient clipping
+                torch.nn.utils.clip_grad_value_(
+                    self.classifier.parameters(), clip_value=self.grad_clip
+                )
+
+                self.optimizer.step()
+
+    @abstractmethod
+    def forward(self, x):
+        pass
 
     def _make_dataloader(
         stacked_trajectories: torch.Tensor, train_labels: torch.Tensor, batch_size: int
@@ -79,6 +126,8 @@ class IndividualAttackTrainer(AttackTrainer):
     Used to train the individual attack classifier, i.e. IndividualAttackClassifier.
 
     Attributes:
+        action_dim (int): Dimension of action space.
+        T_max (int): Max trajectory length.
         classifier (nn.Module): The attack classifier to train.
         bce (nn.BCELoss): BCE Loss.
         optimizer (torch.optim.Adam): Adam optimizer.
@@ -91,7 +140,6 @@ class IndividualAttackTrainer(AttackTrainer):
         self,
         action_dim: int,
         T_max: int,
-        classification_threshold: float = 0.5,
         num_channels: ArrayLike = [600, 600],
         kernel_size: int = 3,
         dropout: float = 0.45,
@@ -106,8 +154,6 @@ class IndividualAttackTrainer(AttackTrainer):
         Args:
             action_dim (int): Dimension of action space.
             T_max (int): Max trajectory length.
-            classification_threshold (float): Minimum probability for a
-                positive classification.
             num_channels (ArrayLike): number of feature channels in each residual block of the network.
             kernel_size (int): Kernel size for convolutions.
             dropout (float): Dropout rate.
@@ -117,43 +163,63 @@ class IndividualAttackTrainer(AttackTrainer):
                 epochs.
             scheduler_decay (float): Learning rate decay rate.
         """
-        super().__init__(action_dim, T_max, classification_threshold)
+        super().__init__(
+            action_dim, T_max, lr, grad_clip, scheduler_step, scheduler_decay
+        )
         self.classifier = IndividualAttackClassifier(
             action_dim, num_channels, kernel_size, dropout
         )
-        self.bce = nn.BCELoss()
-        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, scheduler_step, gamma=scheduler_decay
-        )
-        self.grad_clip = grad_clip
 
-    def train(
+    def forward(self, x):
+        return self.classifier(x)
+
+
+class CollectiveAttackTrainer(AttackTrainer):
+    """
+    Used to train the collective attack classifier, i.e. CollectiveAttackClassifier.
+
+    Attributes:
+        action_dim (int): Dimension of action space.
+        T_max (int): Max trajectory length.
+        classifier (nn.Module): The attack classifier to train.
+        bce (nn.BCELoss): BCE Loss.
+        optimizer (torch.optim.Adam): Adam optimizer.
+        scheduler (torch.optim.lr_scheduler.StepLR): LR scheduler to decay LR
+            every scheduler_steps.
+        grad_clip (float): Threshold value for gradient clipping.
+    """
+
+    def __init__(
         self,
-        stacked_trajectories: torch.Tensor,
-        train_labels: torch.Tensor,
-        epochs: int = 300,
-        batch_size: int = 16,
-    ) -> None:
-        train_loader = self._make_dataloader(
-            stacked_trajectories, train_labels, batch_size
+        action_dim: int,
+        T_max: int,
+        dropout: float = 0.0,
+        lr: float = 0.0008,
+        grad_clip: float = 0.35,
+        scheduler_step=100,
+        scheduler_decay=1.0,
+    ):
+        """
+        Initializes an IndividualAttackTrainer with the given parameters.
+
+        Args:
+            action_dim (int): Dimension of action space.
+            T_max (int): Max trajectory length.
+            kernel_size (int): Kernel size for convolutions.
+            dropout (float): Dropout rate.
+            lr (float): Initial learning rate.
+            grad_clip (float): Threshold value for gradient clipping.
+            scheduler_step (int): The learning rate will update every scheduler_step
+                epochs.
+            scheduler_decay (float): Learning rate decay rate.
+        """
+        super().__init__(
+            action_dim, T_max, lr, grad_clip, scheduler_step, scheduler_decay
         )
+        self.classifier = CollectiveAttackClassifier(action_dim)
 
-        for _ in range(epochs):
-            for inputs, labels in train_loader:
-                self.optimizer.zero_grad()
-
-                out = self.classifier(inputs)
-
-                loss = self.bce(out, labels)
-
-                loss.backward()
-                # Gradient clipping
-                torch.nn.utils.clip_grad_value_(
-                    self.classifier.parameters(), clip_value=self.grad_clip
-                )
-
-                self.optimizer.step()
+    def forward(self, x):
+        return self.classifier(x)
 
 
 class IndividualAttackClassifier(nn.Module):
@@ -185,10 +251,37 @@ class IndividualAttackClassifier(nn.Module):
             dropout=dropout,
         )
 
-        self.fc = nn.Linear(num_channels, 1)
+        self.fc = nn.Linear(num_channels[-1], 1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        x = self.tcn(x)
+        # x: [B, 2d_A, T]
+        x = self.tcn(x)  # [B, num_channels[-1], T]
+        x = torch.mean(x, dim=2)  # Mean over time - [B, num_channels[-1]]
+        x = self.fc(x)  # [B,]
+        return self.sigmoid(x)
+
+
+class CollectiveAttackClassifier(nn.Module):
+    """
+    A Resnet-18-based classifier that, given pairs of batched candidate and
+    output trajectories, determines if the candidate trajectories were used
+    in training.
+    """
+
+    def __init__(self, action_dim: int):
+        input_channels = 2 * action_dim
+        self.resnet = resnet18()
+        # Modify conv layer to work with actions
+        self.resnet.conv1 = nn.Conv2d(
+            input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False
+        )
+
+        self.resnet.fc = nn.Linear(512, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        # x: [B, 2d_A, T, m]
+        x = self.resnet(x)
         x = self.fc(x)
         return self.sigmoid(x)
