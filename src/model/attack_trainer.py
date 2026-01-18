@@ -13,36 +13,21 @@ from pytorch_tcn import TCN
 from torchvision.models import resnet18
 
 
-class AttackTrainer(ABC, nn.Module):
+class AttackTrainer(ABC):
     """
     An abstracted version of attack trainers for individual or collective modes
     to de-duplicate common code between them. The individual and collective
     modes should each extend this.
 
-    Note we extend nn.Module here to make the forward method a required
-    abstract method. This way, we ensure implementations have some classification
-    method implemented during the de-duplicated training step. Nevertheless,
-    the main function of these classes is for training--implementations should
-    define separate classes for their respective models themselves.
-
     Attributes:
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
-        bce (nn.BCELoss): BCE Loss.
-        optimizer (torch.optim.Adam): Adam optimizer.
-        scheduler (torch.optim.lr_scheduler.StepLR): LR scheduler to decay LR
-            every scheduler_steps.
-        grad_clip (float): Threshold value for gradient clipping.
     """
 
     def __init__(
         self,
         action_dim: int,
         T_max: int,
-        lr: float,
-        grad_clip: float = 0.35,
-        scheduler_step=100,
-        scheduler_decay=0.1,
     ):
         """
         Initializes an AttackTrainer with the given action dimension, max
@@ -56,13 +41,27 @@ class AttackTrainer(ABC, nn.Module):
         """
         self.action_dim = action_dim
         self.T_max = T_max
-
         self.bce = nn.BCELoss()
-        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, scheduler_step, gamma=scheduler_decay
-        )
-        self.grad_clip = grad_clip
+        
+    @property
+    @abstractmethod
+    def classifier(self):
+        pass
+        
+    @property
+    @abstractmethod
+    def criterion(self):
+        pass
+    
+    @property
+    @abstractmethod
+    def optimizer(self):
+        pass
+    
+    @property
+    @abstractmethod
+    def scheduler(self):
+        pass   
 
     def train(
         self,
@@ -85,17 +84,18 @@ class AttackTrainer(ABC, nn.Module):
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
+        
         train_loader = self._make_dataloader(
             stacked_trajectories, train_labels, batch_size
         )
 
-        self.train()
+        self.classifier.train()
 
         for _ in range(epochs):
             for inputs, labels in train_loader:
                 self.optimizer.zero_grad()
 
-                out = self(inputs)
+                out = self.classifier(inputs)
 
                 loss = self.bce(out, labels)
 
@@ -164,15 +164,33 @@ class IndividualAttackTrainer(AttackTrainer):
             scheduler_decay (float): Learning rate decay rate.
         """
         super().__init__(
-            action_dim, T_max, lr, grad_clip, scheduler_step, scheduler_decay
+            action_dim, T_max
         )
+        
         self.classifier = IndividualAttackClassifier(
             action_dim, num_channels, kernel_size, dropout
         )
-
-    def forward(self, x):
-        return self.classifier(x)
-
+        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer, scheduler_step, gamma=scheduler_decay
+        )
+        self.grad_clip = grad_clip
+        
+    @property
+    def classifier(self):
+        return self.classifier
+        
+    @property
+    def criterion(self):
+        return self.criterion
+    
+    @property
+    def optimizer(self):
+        return self.optimizer
+    
+    @property
+    def scheduler(self):
+        return self.scheduler
 
 class CollectiveAttackTrainer(AttackTrainer):
     """
@@ -214,12 +232,31 @@ class CollectiveAttackTrainer(AttackTrainer):
             scheduler_decay (float): Learning rate decay rate.
         """
         super().__init__(
-            action_dim, T_max, lr, grad_clip, scheduler_step, scheduler_decay
+            action_dim, T_max
         )
+        
         self.classifier = CollectiveAttackClassifier(action_dim)
+        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
+        self.scheduler = torch.optim.lr_scheduler.StepLR(
+            self.optimizer, scheduler_step, gamma=scheduler_decay
+        )
+        self.grad_clip = grad_clip
 
-    def forward(self, x):
-        return self.classifier(x)
+    @property
+    def classifier(self):
+        return self.classifier
+        
+    @property
+    def criterion(self):
+        return self.criterion
+    
+    @property
+    def optimizer(self):
+        return self.optimizer
+    
+    @property
+    def scheduler(self):
+        return self.scheduler
 
 
 class IndividualAttackClassifier(nn.Module):
@@ -270,6 +307,13 @@ class CollectiveAttackClassifier(nn.Module):
     """
 
     def __init__(self, action_dim: int):
+        """
+        Initializes a CollectiveAttackClassi for __init__
+        
+        :param self: Description
+        :param action_dim: Description
+        :type action_dim: int
+        """
         input_channels = 2 * action_dim
         self.resnet = resnet18()
         # Modify conv layer to work with actions
