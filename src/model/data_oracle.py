@@ -35,10 +35,10 @@ class DataOracle:
 
     def collect_trajectories(
         self, n_trajectories: int, T_max: int, seed: int = None
-    ) -> List[Dict[str, Union[object, List[Tuple[object, object, float, object]]]]]:
+    ) -> List[Dict[str, List[object]]]:
         """
         Returns the requested number of i.i.d. trajectories from the supplied
-        environment, stopping early if T_max steps are taken.
+        environment, stopping early within each trajectory if T_max steps are taken.
 
         Args:
             n_trajectories (int): Number of trajectories to generate.
@@ -46,11 +46,10 @@ class DataOracle:
             seed (int): Optional random seed for reproducibility.
 
         Returns:
-            List[Dict[str, Union[object, List[Tuple[object, object,
-                float, object]]]]]: List of trajectories, where each trajectory
-                contains an 'initial_state' key mapping to the initial state,
-                and a 'transitions' key mapping to a list of (s, a, r, s')
-                tuples.
+             List[Dict[str, List[object]]]: List of trajectories, where each trajectory
+                contains an a 'states' key mapping to a list of states, a 'actions'
+                key mapping to a list of actions, and a 'rewards' key mapping
+                to a list of rewards.
         """
         if seed is not None:  # For reuse
             self.env.seed(seed)
@@ -58,11 +57,11 @@ class DataOracle:
 
         trajectories = []
         for _ in range(n_trajectories):
-            initial_state = self.env.reset()  # Always start a new episode.
+            states = []
+            actions = []
+            rewards = []
 
-            transitions = []
-
-            current_state = initial_state
+            current_state = self.env.reset()  # Always start a new episode.
 
             for _ in range(T_max):
                 # Get the action
@@ -71,16 +70,18 @@ class DataOracle:
                 # Step through environment
                 next_state, reward, done, _, _ = self.env.step(action)
 
-                transition = (current_state, action, reward, next_state)
-                transitions.append(transition)
+                states.append(current_state)
+                actions.append(action)
+                rewards.append(reward)
 
                 if done:
+                    states.append(next_state)
                     break
 
                 current_state = next_state
 
             trajectories.append(
-                {"initial_state": initial_state, "transitions": transitions}
+                {"states": states, "actions": actions, "rewards": rewards}
             )
 
         return trajectories
