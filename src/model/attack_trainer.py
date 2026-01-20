@@ -41,26 +41,25 @@ class AttackTrainer(ABC):
         """
         self.action_dim = action_dim
         self.T_max = T_max
-        self.bce = nn.BCELoss()
         
     @property
     @abstractmethod
-    def classifier(self):
+    def classifier(self) -> nn.Module:
         pass
         
     @property
     @abstractmethod
-    def criterion(self):
+    def criterion(self)-> nn.Module:
         pass
     
     @property
     @abstractmethod
-    def optimizer(self):
+    def optimizer(self) -> torch.optim.Optimizer:
         pass
     
     @property
     @abstractmethod
-    def scheduler(self):
+    def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
         pass   
 
     def train(
@@ -97,7 +96,7 @@ class AttackTrainer(ABC):
 
                 out = self.classifier(inputs)
 
-                loss = self.bce(out, labels)
+                loss = self.criterion(out, labels)
 
                 loss.backward()
                 # Gradient clipping
@@ -129,9 +128,9 @@ class IndividualAttackTrainer(AttackTrainer):
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
         classifier (nn.Module): The attack classifier to train.
-        bce (nn.BCELoss): BCE Loss.
-        optimizer (torch.optim.Adam): Adam optimizer.
-        scheduler (torch.optim.lr_scheduler.StepLR): LR scheduler to decay LR
+        criterion (nn.Module): BCE Loss.
+        optimizer (torch.optim.Optimizer): Adam optimizer.
+        scheduler (torch.optim.lr_scheduler.LRScheduler): LR scheduler to decay LR
             every scheduler_steps.
         grad_clip (float): Threshold value for gradient clipping.
     """
@@ -170,6 +169,7 @@ class IndividualAttackTrainer(AttackTrainer):
         self.classifier = IndividualAttackClassifier(
             action_dim, num_channels, kernel_size, dropout
         )
+        self.criterion = nn.BCELoss()
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.StepLR(
             self.optimizer, scheduler_step, gamma=scheduler_decay
@@ -177,19 +177,19 @@ class IndividualAttackTrainer(AttackTrainer):
         self.grad_clip = grad_clip
         
     @property
-    def classifier(self):
+    def classifier(self) -> nn.Module:
         return self.classifier
         
     @property
-    def criterion(self):
+    def criterion(self) -> nn.Module:
         return self.criterion
     
     @property
-    def optimizer(self):
+    def optimizer(self) -> torch.optim.Optimizer:
         return self.optimizer
     
     @property
-    def scheduler(self):
+    def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
         return self.scheduler
 
 class CollectiveAttackTrainer(AttackTrainer):
@@ -200,9 +200,9 @@ class CollectiveAttackTrainer(AttackTrainer):
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
         classifier (nn.Module): The attack classifier to train.
-        bce (nn.BCELoss): BCE Loss.
-        optimizer (torch.optim.Adam): Adam optimizer.
-        scheduler (torch.optim.lr_scheduler.StepLR): LR scheduler to decay LR
+        criterion (nn.Module): BCE Loss.
+        optimizer (torch.optim.Optimizer): Adam optimizer.
+        scheduler (torch.optim.lr_scheduler.LRScheduler): LR scheduler to decay LR
             every scheduler_steps.
         grad_clip (float): Threshold value for gradient clipping.
     """
@@ -236,6 +236,7 @@ class CollectiveAttackTrainer(AttackTrainer):
         )
         
         self.classifier = CollectiveAttackClassifier(action_dim)
+        self.criterion = nn.BCELoss()
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
         self.scheduler = torch.optim.lr_scheduler.StepLR(
             self.optimizer, scheduler_step, gamma=scheduler_decay
@@ -243,22 +244,21 @@ class CollectiveAttackTrainer(AttackTrainer):
         self.grad_clip = grad_clip
 
     @property
-    def classifier(self):
+    def classifier(self) -> nn.Module:
         return self.classifier
         
     @property
-    def criterion(self):
+    def criterion(self) -> nn.Module:
         return self.criterion
     
     @property
-    def optimizer(self):
+    def optimizer(self) -> torch.optim.Optimizer:
         return self.optimizer
     
     @property
-    def scheduler(self):
+    def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
         return self.scheduler
-
-
+    
 class IndividualAttackClassifier(nn.Module):
     """
     A TCN-based classifier used for individual trajectories.
