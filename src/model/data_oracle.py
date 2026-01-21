@@ -35,7 +35,7 @@ class DataOracle:
 
     def collect_trajectories(
         self, n_trajectories: int, T_max: int, seed: int = None
-    ) -> List[Dict[str, List[object]]]:
+    ) -> List[Dict[str, np.ndarray]]:
         """
         Returns the requested number of i.i.d. trajectories from the supplied
         environment, stopping early within each trajectory if T_max steps are taken.
@@ -46,10 +46,10 @@ class DataOracle:
             seed (int): Optional random seed for reproducibility.
 
         Returns:
-             List[Dict[str, List[object]]]: List of trajectories, where each trajectory
-                contains an a 'states' key mapping to a list of states, a 'actions'
-                key mapping to a list of actions, and a 'rewards' key mapping
-                to a list of rewards.
+            List[Dict[str, np.ndarray]]: List of trajectories, where each trajectory
+                contains an a 'states' key mapping to a [T, state_dim] array of states,
+                a 'actions' key mapping to a [T, action_dim] array of actions,
+                and a 'rewards' key mapping to a [T,] array of rewards.
         """
         if seed is not None:  # For reuse
             self.env.seed(seed)
@@ -81,7 +81,7 @@ class DataOracle:
                 current_state = next_state
 
             trajectories.append(
-                {"states": states, "actions": actions, "rewards": rewards}
+                {"states": np.array(states), "actions": np.array(actions), "rewards": np.array(rewards)}
             )
 
         return trajectories

@@ -31,7 +31,7 @@ class TrainerOracle:
 
     def train(
         self,
-        trajectories: List[Dict[str, List[object]]],
+        trajectories: List[Dict[str, np.ndarray]],
         epochs: int,
     ) -> None:
         """
@@ -42,10 +42,11 @@ class TrainerOracle:
         will be no underlying BCQ.
 
         Args:
-            trajectories (List[Dict[str, List[object]]]): List of trajectories,
+            trajectories (List[Dict[str, np.ndarray]]): List of trajectories,
                 where each trajectory contains an a 'states' key mapping to a
-                list of states, a 'actions' key mapping to a list of actions,
-                and a 'rewards' key mapping to a list of rewards.
+                [T, state_dim] array of states, a 'actions' key mapping to a
+                [T, action_dim] array of actions, and a 'rewards' key mapping
+                to a [T,] array of rewards.
             epochs (int): Number of epochs to train BCQ for.
         """
         # We already have the trajectories, so we just need to prepare them
@@ -56,9 +57,9 @@ class TrainerOracle:
         for traj in trajectories:
 
             episode = Episode(
-                observations=np.array(traj['states']),
-                actions=np.array(traj['actions']),
-                rewards=np.array(traj['rewards']),
+                observations=traj['states'],
+                actions=traj['actions'],
+                rewards=traj['rewards'],
             )
 
             episodes.append(episode)
@@ -82,8 +83,8 @@ class TrainerOracle:
         self.bcq.fit(episodes)
 
     def get_output_trajectories(
-        self, initial_states: List[object], T_max: int, seed: int = None
-    ) -> List[Dict[str, List[object]]]:
+        self, initial_states: np.ndarray, T_max: int, seed: int = None
+    ) -> List[Dict[str, np.ndarray]]:
         """
         Produces trajectories formed from applying the learned BCQ policy on
         the list of initial states.
@@ -92,16 +93,17 @@ class TrainerOracle:
         will be no underlying BCQ.
 
         Args:
-            initial_states (List[object]): List of initial states to start the
+            initial_states (np.ndarray): Array of initial states to start the
                 produced trajectories from.
             T_max (int): Max number of steps in a trajectory.
             seed (int): Optional random seed for reproducibility.
             
         Returns:
-            List[Dict[str, List[object]]]: List of outputted trajectories, where
-                each trajectory contains an a 'states' key mapping to a list
-                of states, a 'actions' key mapping to a list of actions, and
-                a 'rewards' key mapping to a list of rewards.
+            List[Dict[str, np.ndarray]]: List of outputted trajectories,
+                where each trajectory contains an a 'states' key mapping to a
+                [T, state_dim] array of states, a 'actions' key mapping to a
+                [T, action_dim] array of actions, and a 'rewards' key mapping
+                to a [T,] array of rewards.
 
         Raises:
             RuntimeError: if train is not called before
@@ -139,7 +141,7 @@ class TrainerOracle:
                 current_state = next_state
 
             trajectories.append(
-                {"states": states, "actions": actions, "rewards": rewards}
+                {"states": np.array(states), "actions": np.array(actions), "rewards": np.array(rewards)}
             )
 
         return trajectories

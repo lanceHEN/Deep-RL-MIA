@@ -6,6 +6,7 @@ and collective modes.
 from abc import ABC, abstractmethod
 from typing import ArrayLike
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
@@ -64,8 +65,8 @@ class AttackTrainer(ABC):
 
     def train(
         self,
-        stacked_trajectories: torch.Tensor,
-        train_labels: torch.Tensor,
+        stacked_trajectories: np.ndarray,
+        train_labels: np.ndarray,
         epochs: int,
         batch_size: int,
     ) -> None:
@@ -74,11 +75,11 @@ class AttackTrainer(ABC):
         on the given stacked trajectory pairs and labels.
 
         Args:
-            stacked_trajectories (torch.Tensor): Vertically stacked query and
+            stacked_trajectories (np.ndarray): Vertically stacked query and
                 policy output trajectories. Either [n_samples, (2 * action_dim), T_max]
                 or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
                 whether in individual or collective mode.
-            train_labels (torch.Tensor): [B,] tensor of labels for the trajectory
+            train_labels (np.ndarray): [n_samples,] array of labels for the trajectory
                 stacks.
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
@@ -105,18 +106,29 @@ class AttackTrainer(ABC):
                 )
 
                 self.optimizer.step()
-
-    @abstractmethod
-    def forward(self, x):
-        pass
+                
+    def predict(self, stacked_trajectories: np.ndarray) -> np.ndarray:
+        """
+        Given the stacked trajectories, produces classification predictions.
+        
+        Args:
+            stacked_trajectories (np.ndarray): Vertically stacked query and
+                policy output trajectories. Either [n_samples, (2 * action_dim), T_max]
+                or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
+                whether in individual or collective mode.
+        Returns:
+            np.ndarray: [n_samples,] array of predicted probabilities for the trajectory
+                stacks.
+        """
+        return self.classifier(torch.from_numpy(stacked_trajectories)).numpy()
 
     def _make_dataloader(
-        stacked_trajectories: torch.Tensor, train_labels: torch.Tensor, batch_size: int
+        stacked_trajectories: np.ndarray, train_labels: np.ndarray, batch_size: int
     ) -> DataLoader:
         """
         Produces a torch DataLoader over the given trajectories and labels.
         """
-        dataset = TensorDataset(stacked_trajectories, train_labels)
+        dataset = TensorDataset(torch.from_numpy(stacked_trajectories), torch.from_numpy(train_labels))
         return DataLoader(dataset, batch_size=batch_size)
 
 

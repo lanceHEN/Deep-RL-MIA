@@ -2,12 +2,12 @@ from typing import List, Dict, Union, Tuple
 from collections import defaultdict
 
 import torch
+import numpy as np
 
 class DataFormatter:
-    # Pairs in output trajectories if they have the same start state
     
     @staticmethod
-    def _set_action_length(actions: List[object], T_max: int) -> List[object]:
+    def _set_action_length(actions: np.ndarray, T_max: int) -> np.ndarray:
         """
         Sets actions to have length T_max, trimming if it's too long or repeating
         the last action if too short.
@@ -20,37 +20,37 @@ class DataFormatter:
         else:
             last_action = actions[-1]
             for _ in range(T_max - n):
-                actions.append(last_action)
+                actions = np.append(actions, last_action, axis=0)
             
             return actions
     
     def pair_trajectories(self, train_trajectories: List[
-            List[Dict[str, List[object]]]
+            List[Dict[str, np.ndarray]]
         ], output_trajectories: List[
-            List[Dict[str, List[object]]]
+            List[Dict[str, np.ndarray]]
         ], external_trajectories: List[
-            List[Dict[str, List[object]]]
-        ], T_max: int) -> Tuple[torch.Tensor, torch.Tensor]:
+            List[Dict[str, np.ndarray]]
+        ], T_max: int) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Pairs output with training and/or external trajectories, returning torch
-        Tensors of the stacked trajectories (actions only) and labels, respectively.
+        Pairs output with training and/or external trajectories, returning arrays
+        of the stacked trajectories (actions only) and labels, respectively.
         
         Args:
-            train_trajectories (List[Dict[str, List[object]]]): List of
-                training trajectories, where each trajectory
-                contains an a 'states' key mapping to a list of states, a 'actions'
-                key mapping to a list of actions, and a 'rewards' key mapping
-                to a list of rewards.
-            output_trajectories (List[Dict[str, List[object]]]): List of output
+            train_trajectories (List[Dict[str, np.ndarray]]): List of training trajectories,
+                where each trajectory contains an a 'states' key mapping to a
+                [T, state_dim] array of states, a 'actions' key mapping to a
+                [T, action_dim] array of actions, and a 'rewards' key mapping
+                to a [T,] array of rewards.
+            output_trajectories (List[Dict[str, np.ndarray]]): List of output
                 trajectories of the same format as train_trajectories.
-            external_trajectories (List[Dict[str, List[object]]]): List of external
+            external_trajectories (List[Dict[str, np.ndarray]]): List of external
                 trajectories of the same format as train_trajectories.
             T_max (int): Maximum trajectory length--smaller trajectories have
                 their last action repeated to get to length T_max while larger
                 ones are trimmed.
                 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: The stacked train/external and
+            Tuple[np.ndarray, np.ndarray]: The stacked train/external and
                 output trajectories (actions only), along with their labels (1 for train, 0
                 for external).
         """
@@ -76,10 +76,10 @@ class DataFormatter:
             for output_traj in output_trajs:         
                 for label, other_trajs in zip([1, 0], [train_trajs, external_trajs]):
                     for other_traj in other_trajs:
-                        final_trajs.append(torch.cat(torch.Tensor(other_traj), torch.Tensor(output_traj)), dim=0)
+                        final_trajs.append(np.vstack((other_traj, output_traj)))
                         labels.append(label)
                         
-        return torch.stack(final_trajs), torch.Tensor(labels)
+        return np.arrayk(final_trajs), np.array(labels)
                 
                 
         
