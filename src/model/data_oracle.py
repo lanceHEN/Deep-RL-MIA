@@ -1,6 +1,6 @@
 from typing import List, Dict, Union, Tuple
 
-import gym
+import gymnasium as gym
 from stable_baselines3 import DDPG
 import numpy as np
 
@@ -29,9 +29,14 @@ class DataOracle:
         self.env = env
 
         # Initialize DDPG with the given env
-        self.policy = DDPG("MlpPolicy", self.env, verbose=0)
+        self.policy = DDPG(
+            "MlpPolicy", self.env, verbose=0, buffer_size=10000, learning_starts=1000
+        )
+
         # Learn for some steps.
-        self.policy.learn(total_timesteps=100000)
+        print("Learning DDPG policy for data oracle.")
+        self.policy.learn(total_timesteps=100, progress_bar=True)
+        print("Finished learning DDPG policy")
 
     def collect_trajectories(
         self, n_trajectories: int, T_max: int, seed: int = None
@@ -49,10 +54,12 @@ class DataOracle:
             List[Dict[str, np.ndarray]]: List of trajectories, where each trajectory
                 contains an a 'states' key mapping to a [T, state_dim] array of states,
                 a 'actions' key mapping to a [T, action_dim] array of actions,
-                and a 'rewards' key mapping to a [T,] array of rewards.
+                a 'rewards' key mapping to a [T,] array of rewards, and a 'terminals'
+                key mapping to whether each transition was the last one or not.
         """
+        print(f"Generating {n_trajectories} trajectories.")
         if seed is not None:  # For reuse
-            self.env.seed(seed)
+            self.env.reset(seed=seed)
             np.random.seed(seed)
 
         trajectories = []
@@ -61,9 +68,10 @@ class DataOracle:
             actions = []
             rewards = []
 
-            current_state = self.env.reset()  # Always start a new episode.
+            current_state = self.env.reset()[0]  # Always start a new episode.
 
             for _ in range(T_max):
+                # print(current_state)
                 # Get the action
                 action, _ = self.policy.predict(current_state)
 
@@ -80,8 +88,19 @@ class DataOracle:
 
                 current_state = next_state
 
+            # Create terminal flags array
+            T = len(actions)
+            terminals = np.zeros(T, dtype=np.float32)
+            terminals[-1] = 1.0
+
             trajectories.append(
-                {"states": np.array(states), "actions": np.array(actions), "rewards": np.array(rewards)}
+                {
+                    "states": np.array(states),
+                    "actions": np.array(actions),
+                    "rewards": np.array(rewards),
+                    "terminals": terminals,
+                }
             )
 
+        print("Finished generating trajectories.")
         return trajectories

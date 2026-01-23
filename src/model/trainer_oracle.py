@@ -1,8 +1,8 @@
 from typing import List, Dict, Union, Tuple
 
-import gym
-from d3rlpy.algos import BCQ
-from d3rlpy.dataset import Episode
+import gymnasium as gym
+from d3rlpy.algos import BCQConfig
+from d3rlpy.dataset import MDPDataset
 import numpy as np
 
 
@@ -45,42 +45,49 @@ class TrainerOracle:
             trajectories (List[Dict[str, np.ndarray]]): List of trajectories,
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'actions' key mapping to a
-                [T, action_dim] array of actions, and a 'rewards' key mapping
-                to a [T,] array of rewards.
+                [T, action_dim] array of actions, a 'rewards' key mapping to
+                a 'rewards' key mapping to a [T,] array of rewards, and a
+                'terminals' key mapping to whether each transition was the
+                last one or not via binary flags.
             epochs (int): Number of epochs to train BCQ for.
         """
         # We already have the trajectories, so we just need to prepare them
         # for self.bcq.
 
         # To do so, convert each into an Episode object
-        episodes = []
+        observations = []
+        actions = []
+        rewards = []
+        terminals = []
         for traj in trajectories:
+            observations.append(traj["states"])
+            actions.append(traj["actions"])
+            rewards.append(traj["rewards"])
+            terminals.append(traj["terminals"])
 
-            episode = Episode(
-                observations=traj['states'],
-                actions=traj['actions'],
-                rewards=traj['rewards'],
-            )
+        observations = np.concatenate(observations, axis=0)
+        actions = np.concatenate(actions, axis=0)
+        rewards = np.concatenate(rewards, axis=0)
+        terminals = np.concatenate(terminals, axis=0)
 
-            episodes.append(episode)
-
-        # Construct the BCQ
-        self.bcq = BCQ(
-            actor_learning_rate=1e-3,
-            critic_learning_rate=1e-3,
-            imitator_learning_rate=1e-3,
-            batch_size=100,
-            gamma=0.99,
-            tau=0.005,
-            n_critics=2,
-            lam=0.75,
-            n_action_samples=100,
-            action_flexibility=0.05,
-            use_gpu=False,
-            n_epochs=epochs,
+        # Create dataset
+        dataset = MDPDataset(
+            observations=observations,
+            actions=actions,
+            rewards=rewards,
+            terminals=terminals,
         )
 
-        self.bcq.fit(episodes)
+        # Create BCQ config
+        config = BCQConfig()
+
+        # Build BCQ from config
+        self.bcq = config.create(device="cpu:0")
+
+        print(f"Training BCQ for {epochs} epochs...")
+        self.bcq.fit(dataset, n_steps=epochs, show_progress=True)
+
+        print("BCQ training complete!")
 
     def get_output_trajectories(
         self, initial_states: np.ndarray, T_max: int, seed: int = None
@@ -97,14 +104,14 @@ class TrainerOracle:
                 produced trajectories from.
             T_max (int): Max number of steps in a trajectory.
             seed (int): Optional random seed for reproducibility.
-            
+
         Returns:
             List[Dict[str, np.ndarray]]: List of outputted trajectories,
                 where each trajectory contains an a 'states' key mapping to a
-                [T, state_dim] array of states, a 'actions' key mapping to a
-                [T, action_dim] array of actions, and a 'rewards' key mapping
-                to a [T,] array of rewards.
-
+                [T, state_dim] array of states, a 'rewards' key mapping to a [T,]
+                array of rewards, and a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags.
+            epochs (int): Number of epochs to train BCQ for.
         Raises:
             RuntimeError: if train is not called before
         """
@@ -112,7 +119,7 @@ class TrainerOracle:
             raise RuntimeError("train method must be called first")
 
         if seed is not None:
-            self.env.seed(seed)
+            self.env.reset(seed=seed)
 
         trajectories = []
 
@@ -140,8 +147,17 @@ class TrainerOracle:
 
                 current_state = next_state
 
+            T = len(actions)
+            terminals = np.zeros(T, dtype=np.float32)
+            terminals[-1] = 1.0
+
             trajectories.append(
-                {"states": np.array(states), "actions": np.array(actions), "rewards": np.array(rewards)}
+                {
+                    "states": np.array(states),
+                    "actions": np.array(actions),
+                    "rewards": np.array(rewards),
+                    "terminals": terminals,
+                }
             )
 
         return trajectories

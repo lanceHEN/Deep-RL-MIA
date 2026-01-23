@@ -4,7 +4,7 @@ and collective modes.
 """
 
 from abc import ABC, abstractmethod
-from typing import ArrayLike
+from typing import List
 
 import numpy as np
 import torch
@@ -42,26 +42,26 @@ class AttackTrainer(ABC):
         """
         self.action_dim = action_dim
         self.T_max = T_max
-        
+
     @property
     @abstractmethod
     def classifier(self) -> nn.Module:
         pass
-        
+
     @property
     @abstractmethod
-    def criterion(self)-> nn.Module:
+    def criterion(self) -> nn.Module:
         pass
-    
+
     @property
     @abstractmethod
     def optimizer(self) -> torch.optim.Optimizer:
         pass
-    
+
     @property
     @abstractmethod
     def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
-        pass   
+        pass
 
     def train(
         self,
@@ -78,13 +78,14 @@ class AttackTrainer(ABC):
             stacked_trajectories (np.ndarray): Vertically stacked query and
                 policy output trajectories. Either [n_samples, (2 * action_dim), T_max]
                 or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
-                whether in individual or collective mode.
+                whether in individual or collective mode. Note only actions are stored,
+                and they don't have to be shuffled.
             train_labels (np.ndarray): [n_samples,] array of labels for the trajectory
                 stacks.
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
-        
+
         train_loader = self._make_dataloader(
             stacked_trajectories, train_labels, batch_size
         )
@@ -106,16 +107,16 @@ class AttackTrainer(ABC):
                 )
 
                 self.optimizer.step()
-                
+
     def predict(self, stacked_trajectories: np.ndarray) -> np.ndarray:
         """
         Given the stacked trajectories, produces classification predictions.
-        
+
         Args:
             stacked_trajectories (np.ndarray): Vertically stacked query and
                 policy output trajectories. Either [n_samples, (2 * action_dim), T_max]
                 or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
-                whether in individual or collective mode.
+                whether in individual or collective mode.  Note only actions are stored.
         Returns:
             np.ndarray: [n_samples,] array of predicted probabilities for the trajectory
                 stacks.
@@ -126,10 +127,12 @@ class AttackTrainer(ABC):
         stacked_trajectories: np.ndarray, train_labels: np.ndarray, batch_size: int
     ) -> DataLoader:
         """
-        Produces a torch DataLoader over the given trajectories and labels.
+        Produces a torch DataLoader shuffled over the given trajectories and labels.
         """
-        dataset = TensorDataset(torch.from_numpy(stacked_trajectories), torch.from_numpy(train_labels))
-        return DataLoader(dataset, batch_size=batch_size)
+        dataset = TensorDataset(
+            torch.from_numpy(stacked_trajectories), torch.from_numpy(train_labels)
+        )
+        return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
 class IndividualAttackTrainer(AttackTrainer):
@@ -151,7 +154,7 @@ class IndividualAttackTrainer(AttackTrainer):
         self,
         action_dim: int,
         T_max: int,
-        num_channels: ArrayLike = [600, 600],
+        num_channels: List = [600, 600],
         kernel_size: int = 3,
         dropout: float = 0.45,
         lr: float = 0.0003,
@@ -165,7 +168,7 @@ class IndividualAttackTrainer(AttackTrainer):
         Args:
             action_dim (int): Dimension of action space.
             T_max (int): Max trajectory length.
-            num_channels (ArrayLike): number of feature channels in each residual block of the network.
+            num_channels (List): number of feature channels in each residual block of the network.
             kernel_size (int): Kernel size for convolutions.
             dropout (float): Dropout rate.
             lr (float): Initial learning rate.
@@ -174,35 +177,58 @@ class IndividualAttackTrainer(AttackTrainer):
                 epochs.
             scheduler_decay (float): Learning rate decay rate.
         """
-        super().__init__(
-            action_dim, T_max
-        )
-        
-        self.classifier = IndividualAttackClassifier(
+        super().__init__(action_dim, T_max)
+
+        self._classifier = IndividualAttackClassifier(
             action_dim, num_channels, kernel_size, dropout
         )
-        self.criterion = nn.BCELoss()
-        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, scheduler_step, gamma=scheduler_decay
+        self._criterion = nn.BCELoss()
+        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
+        self._scheduler = torch.optim.lr_scheduler.StepLR(
+            self._optimizer, scheduler_step, gamma=scheduler_decay
         )
-        self.grad_clip = grad_clip
-        
+        self._grad_clip = grad_clip
+
     @property
     def classifier(self) -> nn.Module:
-        return self.classifier
-        
+        return self._classifier
+
     @property
     def criterion(self) -> nn.Module:
-        return self.criterion
-    
+        return self._criterion
+
     @property
     def optimizer(self) -> torch.optim.Optimizer:
-        return self.optimizer
-    
+        return self._optimizer
+
     @property
     def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
-        return self.scheduler
+        return self._scheduler
+
+    @property
+    def grad_clip(self) -> float:
+        return self._grad_clip
+
+    @classifier.setter
+    def classifier(self, clf):
+        self._classifier = clf
+
+    @criterion.setter
+    def criterion(self, crit):
+        self._criterion = crit
+
+    @optimizer.setter
+    def optimizer(self, opt):
+        self._optimizer = opt
+
+    @scheduler.setter
+    def scheduler(self, sched):
+        self._scheduler = sched
+
+    @grad_clip.setter
+    def grad_clip(self, clip):
+        self._grad_clip = clip
+
 
 class CollectiveAttackTrainer(AttackTrainer):
     """
@@ -243,34 +269,57 @@ class CollectiveAttackTrainer(AttackTrainer):
                 epochs.
             scheduler_decay (float): Learning rate decay rate.
         """
-        super().__init__(
-            action_dim, T_max
+        super().__init__(action_dim, T_max)
+
+        self._classifier = CollectiveAttackClassifier(action_dim)
+        self._criterion = nn.BCELoss()
+        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
+        self._scheduler = torch.optim.lr_scheduler.StepLR(
+            self._optimizer, scheduler_step, gamma=scheduler_decay
         )
-        
-        self.classifier = CollectiveAttackClassifier(action_dim)
-        self.criterion = nn.BCELoss()
-        self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=lr)
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer, scheduler_step, gamma=scheduler_decay
-        )
-        self.grad_clip = grad_clip
+        self._grad_clip = grad_clip
 
     @property
     def classifier(self) -> nn.Module:
-        return self.classifier
-        
+        return self._classifier
+
     @property
     def criterion(self) -> nn.Module:
-        return self.criterion
-    
+        return self._criterion
+
     @property
     def optimizer(self) -> torch.optim.Optimizer:
-        return self.optimizer
-    
+        return self._optimizer
+
     @property
     def scheduler(self) -> torch.optim.lr_scheduler.LRScheduler:
-        return self.scheduler
-    
+        return self._scheduler
+
+    @property
+    def grad_clip(self) -> float:
+        return self._grad_clip
+
+    @classifier.setter
+    def classifier(self, clf):
+        self._classifier = clf
+
+    @criterion.setter
+    def criterion(self, crit):
+        self._criterion = crit
+
+    @optimizer.setter
+    def optimizer(self, opt):
+        self._optimizer = opt
+
+    @scheduler.setter
+    def scheduler(self, sched):
+        self._scheduler = sched
+
+    @grad_clip.setter
+    def grad_clip(self, clip):
+        self._grad_clip = clip
+
+
 class IndividualAttackClassifier(nn.Module):
     """
     A TCN-based classifier used for individual trajectories.
@@ -279,7 +328,7 @@ class IndividualAttackClassifier(nn.Module):
     def __init__(
         self,
         action_dim: int,
-        num_channels: ArrayLike = [600, 600],
+        num_channels: List = [600, 600],
         kernel_size: int = 3,
         dropout: float = 0.45,
     ):
@@ -288,10 +337,11 @@ class IndividualAttackClassifier(nn.Module):
 
         Args:
             action_dim (int): Dimension of action space.
-            num_channels (ArrayLike): number of feature channels in each residual block of the network.
+            num_channels (List): number of feature channels in each residual block of the network.
             kernel_size (int): Kernel size for convolutions.
             dropout (float): Dropout rate.
         """
+        super().__init__()
 
         self.tcn = TCN(
             num_inputs=2 * action_dim,
@@ -320,12 +370,13 @@ class CollectiveAttackClassifier(nn.Module):
 
     def __init__(self, action_dim: int):
         """
-        Initializes a CollectiveAttackClassi for __init__
-        
-        :param self: Description
-        :param action_dim: Description
-        :type action_dim: int
+        Initializes a CollectiveAttackClassifier with the given parameters.
+
+        Args:
+            action_dim (int): Dimension of action space.
         """
+        super().__init__()
+
         input_channels = 2 * action_dim
         self.resnet = resnet18()
         # Modify conv layer to work with actions
