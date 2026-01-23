@@ -11,7 +11,7 @@ class DataOracleConfig:
     """
     Stores config info for DataOracle.
     """
-    enc_name: str
+    env_name: str
     ddpg_verbose: int = 0
     ddpg_buffer_size: int = 10000
     ddpg_learning_starts: int = 1000
