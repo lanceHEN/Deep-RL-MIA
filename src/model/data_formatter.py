@@ -4,8 +4,9 @@ from collections import defaultdict
 import torch
 import numpy as np
 
+
 class DataFormatter:
-    
+
     @staticmethod
     def _set_action_length(actions: np.ndarray, T_max: int) -> np.ndarray:
         """
@@ -19,67 +20,134 @@ class DataFormatter:
             return actions[:T_max]
         else:
             last_action = actions[-1]
-            for _ in range(T_max - n):
-                actions = np.append(actions, last_action, axis=0)
-            
+            actions = np.concatenate(
+                actions, np.full((T_max - n, len(last_action)), last_action)
+            )
+
             return actions
-    
-    def pair_trajectories(self, train_trajectories: List[
-            List[Dict[str, np.ndarray]]
-        ], output_trajectories: List[
-            List[Dict[str, np.ndarray]]
-        ], external_trajectories: List[
-            List[Dict[str, np.ndarray]]
-        ], T_max: int) -> Tuple[np.ndarray, np.ndarray]:
+
+    @staticmethod
+    def pair_train_output_trajectories(
+        train_trajectories: List[List[Dict[str, np.ndarray]]],
+        output_trajectories: List[List[Dict[str, np.ndarray]]],
+        T_max: int,
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Pairs output with training and/or external trajectories, returning arrays
-        of the stacked trajectories (actions only) and labels, respectively.
-        
+        Pairs output with training trajectories, returning arrays
+        of the stacked trajectories (actions only) and positive (1) labels,
+        respectively.
+
+        CRITICAL: Assumes train_trajectories and output_trajectories are given in
+        the same ordered such that the initial state of train_trajectories[i]
+        is the initial state of output_trajectories[i]. This speeds up computation.
+
         Args:
             train_trajectories (List[Dict[str, np.ndarray]]): List of training trajectories,
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'actions' key mapping to a
-                [T, action_dim] array of actions, and a 'rewards' key mapping
-                to a [T,] array of rewards.
+                [T, action_dim] array of actions, a 'rewards' key mapping to a
+                [T,] array of rewards, and a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags.
             output_trajectories (List[Dict[str, np.ndarray]]): List of output
-                trajectories of the same format as train_trajectories.
-            external_trajectories (List[Dict[str, np.ndarray]]): List of external
-                trajectories of the same format as train_trajectories.
+                trajectories of the same format as train_trajectories. Should
+                be given in the same order as train_trajectories such that the
+                initial state of train_trajectories[i] is the initial state of
+                output_trajectories[i]. This speeds up computation.
             T_max (int): Maximum trajectory length--smaller trajectories have
                 their last action repeated to get to length T_max while larger
                 ones are trimmed.
-                
+
         Returns:
-            Tuple[np.ndarray, np.ndarray]: The stacked train/external and
-                output trajectories (actions only), along with their labels (1 for train, 0
-                for external).
+            Tuple[np.ndarray, np.ndarray]: The stacked train and
+                output trajectories (actions only), along with their labels.
         """
-        # First get trajectories (actions only) organized by first state
-        train_trajs_by_initial_state = defaultdict(list)
-        output_trajs_by_initial_state = defaultdict(list)
-        external_trajs_by_initial_state = defaultdict(list)
-        
-        for trajs, mapping in zip([train_trajectories, output_trajectories, external_trajectories], [train_trajs_by_initial_state, output_trajs_by_initial_state, external_trajs_by_initial_state]):
-            for traj in trajs:
-                initial_state = traj["states"][0]
-                actions = DataFormatter._set_action_length(traj["actions"], T_max)
-                mapping[initial_state].append(actions)
-                
-        final_trajs = []
-        labels = []
-                
-        # Now match up output trajs with either
-        for initial_state, output_trajs in output_trajs_by_initial_state.items():
-            train_trajs = train_trajs_by_initial_state[initial_state]
-            external_trajs = external_trajs_by_initial_state[initial_state]
-            
-            for output_traj in output_trajs:         
-                for label, other_trajs in zip([1, 0], [train_trajs, external_trajs]):
-                    for other_traj in other_trajs:
-                        final_trajs.append(np.vstack((other_traj, output_traj)))
-                        labels.append(label)
-                        
-        return np.arrayk(final_trajs), np.array(labels)
-                
-                
-        
+        return DataFormatter._pair_trajectories_with_label(
+            train_trajectories, output_trajectories, T_max, 1.0
+        )
+
+    @staticmethod
+    def pair_external_output_trajectories(
+        external_trajectories: List[List[Dict[str, np.ndarray]]],
+        output_trajectories: List[List[Dict[str, np.ndarray]]],
+        T_max: int,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Pairs output with external trajectories, returning arrays
+        of the stacked trajectories (actions only) and negative (0) labels,
+        respectively.
+
+        CRITICAL: Assumes external_trajectories and output_trajectories are given in
+        the same ordered such that the initial state of external_trajectories[i]
+        is the initial state of output_trajectories[i]. This speeds up computation.
+
+        Args:
+            external_trajectories (List[Dict[str, np.ndarray]]): List of external trajectories,
+                where each trajectory contains an a 'states' key mapping to a
+                [T, state_dim] array of states, a 'actions' key mapping to a
+                [T, action_dim] array of actions, a 'rewards' key mapping to a
+                [T,] array of rewards, and a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags.
+            output_trajectories (List[Dict[str, np.ndarray]]): List of output
+                trajectories of the same format as external_trajectories. Should
+                be given in the same order as external_trajectories such that the
+                initial state of external_trajectories[i] is the initial state of
+                output_trajectories[i]. This speeds up computation.
+            T_max (int): Maximum trajectory length--smaller trajectories have
+                their last action repeated to get to length T_max while larger
+                ones are trimmed.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: The stacked external and
+                output trajectories (actions only), along with their labels.
+        """
+        return DataFormatter._pair_trajectories_with_label(
+            external_trajectories, output_trajectories, T_max, 0.0
+        )
+
+    @staticmethod
+    def _pair_trajectories_with_label(
+        trajectories: List[List[Dict[str, np.ndarray]]],
+        output_trajectories: List[List[Dict[str, np.ndarray]]],
+        T_max: int,
+        label: float,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Pairs trajectories with ouptut trajectories, returning arrays
+        of the stacked trajectories (actions only) and given labels,
+        respectively.
+
+        CRITICAL: Assumes trajectories and output_trajectories are given in
+        the same ordered such that the initial state of trajectories[i]
+        is the initial state of output_trajectories[i]. This speeds up computation.
+
+        Args:
+            trajectories (List[Dict[str, np.ndarray]]): List of non-output trajectories,
+                where each trajectory contains an a 'states' key mapping to a
+                [T, state_dim] array of states, a 'actions' key mapping to a
+                [T, action_dim] array of actions, a 'rewards' key mapping to a
+                [T,] array of rewards, and a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags.
+            output_trajectories (List[Dict[str, np.ndarray]]): List of output
+                trajectories of the same format as trajectories. Should
+                be given in the same order as trajectories such that the
+                initial state of trajectories[i] is the initial state of
+                output_trajectories[i]. This speeds up computation.
+            T_max (int): Maximum trajectory length--smaller trajectories have
+                their last action repeated to get to length T_max while larger
+                ones are trimmed.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: The stacked non-output and
+                output trajectories (actions only), along with their labels.
+        """
+        stacked_trajs = []
+        for traj, output_traj in zip(trajectories, output_trajectories):
+            traj_actions = DataFormatter._set_action_length(traj["actions"], T_max)
+            output_traj_actions = DataFormatter._set_action_length(
+                output_traj["actions"], T_max
+            )
+
+            # Vertically stack traj and output traj
+            stacked_trajs.append(np.vstack((traj_actions, output_traj_actions)))
+
+        return np.array(stacked_trajs), np.full((len(stacked_trajs)), label)
