@@ -4,6 +4,7 @@ import gymnasium as gym
 from stable_baselines3 import DDPG
 import numpy as np
 
+from config import DataOracleConfig
 
 class DataOracle:
     """
@@ -14,28 +15,30 @@ class DataOracle:
     Here, we use DDPG as the exploration policy.
 
     Attributes:
+        config (DataOracleConfig): Stores config information.
         env (gym.Env): Gym environment to interact with.
         policy (DDPG): DDPG-based policy for exploration.
     """
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, config: DataOracleConfig):
         """
-        Initializes a DataOracle object over the given environment.
+        Initializes a DataOracle object over the given config values.
         Also initializes and trains the DDPG exploration policy.
 
         Args:
-            env (gym.Env): Gym environment to interact with.
+            config (DataOracleConfig): Stores config information.
         """
-        self.env = env
+        self.config = config
+        self.env = config.env
 
         # Initialize DDPG with the given env
         self.policy = DDPG(
-            "MlpPolicy", self.env, verbose=0, buffer_size=10000, learning_starts=1000
+            "MlpPolicy", self.env, verbose=self.config.ddpg_verbose, buffer_size=self.config.ddpg_buffer_size, learning_starts=self.config.ddpg_learning_starts
         )
 
         # Learn for some steps.
         print("Learning DDPG policy for data oracle.")
-        self.policy.learn(total_timesteps=100, progress_bar=True)
+        self.policy.learn(total_timesteps=self.config.ddpg_learn_timesteps, progress_bar=True)
         print("Finished learning DDPG policy")
 
     def collect_trajectories(

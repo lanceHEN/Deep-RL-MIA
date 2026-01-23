@@ -13,6 +13,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from pytorch_tcn import TCN
 from torchvision.models import resnet18
 
+from config import IndividualAttackTrainerConfig, CollectiveAttackTrainerConfig
 
 class AttackTrainer(ABC):
     """
@@ -77,7 +78,7 @@ class AttackTrainer(ABC):
         Args:
             stacked_trajectories (np.ndarray): Vertically stacked query and
                 policy output trajectories. Either [n_samples, (2 * action_dim), T_max]
-                or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
+                or [n_samples, 2 * action_dim, T_max, minibatch_size], depending on
                 whether in individual or collective mode. Note only actions are stored,
                 and they don't have to be shuffled.
             train_labels (np.ndarray): [n_samples,] array of labels for the trajectory
@@ -85,7 +86,6 @@ class AttackTrainer(ABC):
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
-
         train_loader = self._make_dataloader(
             stacked_trajectories, train_labels, batch_size
         )
@@ -98,7 +98,7 @@ class AttackTrainer(ABC):
 
                 out = self.classifier(inputs)
 
-                loss = self.criterion(out, labels)
+                loss = self.criterion(out, labels.to(out.dtype))
 
                 loss.backward()
                 # Gradient clipping
@@ -108,6 +108,7 @@ class AttackTrainer(ABC):
 
                 self.optimizer.step()
 
+    @torch.no_grad()
     def predict(self, stacked_trajectories: np.ndarray) -> np.ndarray:
         """
         Given the stacked trajectories, produces classification predictions.
@@ -123,6 +124,7 @@ class AttackTrainer(ABC):
         """
         return self.classifier(torch.from_numpy(stacked_trajectories)).numpy()
 
+    @staticmethod
     def _make_dataloader(
         stacked_trajectories: np.ndarray, train_labels: np.ndarray, batch_size: int
     ) -> DataLoader:
@@ -140,6 +142,7 @@ class IndividualAttackTrainer(AttackTrainer):
     Used to train the individual attack classifier, i.e. IndividualAttackClassifier.
 
     Attributes:
+        config (IndividualAttackTrainerConfig): Stores config info.
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
         classifier (nn.Module): The attack classifier to train.
@@ -152,42 +155,27 @@ class IndividualAttackTrainer(AttackTrainer):
 
     def __init__(
         self,
-        action_dim: int,
-        T_max: int,
-        num_channels: List = [600, 600],
-        kernel_size: int = 3,
-        dropout: float = 0.45,
-        lr: float = 0.0003,
-        grad_clip: float = 0.35,
-        scheduler_step=100,
-        scheduler_decay=0.1,
+        config: IndividualAttackTrainerConfig
     ):
         """
-        Initializes an IndividualAttackTrainer with the given parameters.
+        Initializes an IndividualAttackTrainer with the given config.
 
         Args:
-            action_dim (int): Dimension of action space.
-            T_max (int): Max trajectory length.
-            num_channels (List): number of feature channels in each residual block of the network.
-            kernel_size (int): Kernel size for convolutions.
-            dropout (float): Dropout rate.
-            lr (float): Initial learning rate.
-            grad_clip (float): Threshold value for gradient clipping.
-            scheduler_step (int): The learning rate will update every scheduler_step
-                epochs.
-            scheduler_decay (float): Learning rate decay rate.
+            config (IndividualAttackTrainerConfig): Stores config info.
         """
-        super().__init__(action_dim, T_max)
+        super().__init__(config.action_dim, config.T_max)
+        
+        self.config = config
 
         self._classifier = IndividualAttackClassifier(
-            action_dim, num_channels, kernel_size, dropout
+            self.config.action_dim, self.config.num_channels, self.config.kernel_size, self.config.dropout
         )
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
-            self._optimizer, scheduler_step, gamma=scheduler_decay
+            self._optimizer, self.config.scheduler_step, gamma=self.config.scheduler_decay
         )
-        self._grad_clip = grad_clip
+        self._grad_clip = self.config.grad_clip
 
     @property
     def classifier(self) -> nn.Module:
@@ -247,37 +235,25 @@ class CollectiveAttackTrainer(AttackTrainer):
 
     def __init__(
         self,
-        action_dim: int,
-        T_max: int,
-        dropout: float = 0.0,
-        lr: float = 0.0008,
-        grad_clip: float = 0.35,
-        scheduler_step=100,
-        scheduler_decay=1.0,
+        config: CollectiveAttackTrainerConfig
     ):
         """
-        Initializes an IndividualAttackTrainer with the given parameters.
+        Initializes an IndividualAttackTrainer with the given config.
 
         Args:
-            action_dim (int): Dimension of action space.
-            T_max (int): Max trajectory length.
-            kernel_size (int): Kernel size for convolutions.
-            dropout (float): Dropout rate.
-            lr (float): Initial learning rate.
-            grad_clip (float): Threshold value for gradient clipping.
-            scheduler_step (int): The learning rate will update every scheduler_step
-                epochs.
-            scheduler_decay (float): Learning rate decay rate.
+            config (IndividualAttackTrainer): Stores config info.
         """
-        super().__init__(action_dim, T_max)
+        super().__init__(config.action_dim, config.T_max)
+        
+        self.config = config
 
-        self._classifier = CollectiveAttackClassifier(action_dim)
+        self._classifier = CollectiveAttackClassifier(self.config.action_dim)
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
-            self._optimizer, scheduler_step, gamma=scheduler_decay
+            self._optimizer, self.config.scheduler_step, gamma=self.config.scheduler_decay
         )
-        self._grad_clip = grad_clip
+        self._grad_clip = self.config.grad_clip
 
     @property
     def classifier(self) -> nn.Module:
@@ -357,7 +333,7 @@ class IndividualAttackClassifier(nn.Module):
         # x: [B, 2d_A, T]
         x = self.tcn(x)  # [B, num_channels[-1], T]
         x = torch.mean(x, dim=2)  # Mean over time - [B, num_channels[-1]]
-        x = self.fc(x)  # [B,]
+        x = self.fc(x).squeeze(1)  # [B,]
         return self.sigmoid(x)
 
 
@@ -390,5 +366,5 @@ class CollectiveAttackClassifier(nn.Module):
     def forward(self, x):
         # x: [B, 2d_A, T, m]
         x = self.resnet(x)
-        x = self.fc(x)
+        x = self.fc(x) # [B,]
         return self.sigmoid(x)

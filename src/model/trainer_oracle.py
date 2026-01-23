@@ -5,6 +5,7 @@ from d3rlpy.algos import BCQConfig
 from d3rlpy.dataset import MDPDataset
 import numpy as np
 
+from config import TrainerOracleConfig
 
 class TrainerOracle:
     """
@@ -14,19 +15,21 @@ class TrainerOracle:
     trajectories starting from given initial states.
 
     Attributes:
+        config (DataOracleConfig): Stores config information.
         env (gym.Env): Gym environment to interact with.
         bce (BCQ): d3rlpy BCQ implementation.
     """
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, config: TrainerOracleConfig):
         """
-        Initializes a TrainerOracle over the given environment. Note
+        Initializes a TrainerOracle over the given config values. Note
         bcq will be None until train is called.
 
         Args:
-             env (gym.Env): Gym environment to interact with.
+            config (DataOracleConfig): Stores config information.
         """
-        self.env = env
+        self.config = config
+        self.env = self.config.env
         self.bcq = None
 
     def train(
@@ -69,11 +72,6 @@ class TrainerOracle:
         actions = np.concatenate(actions, axis=0) # [T, action_dim] 
         rewards = np.concatenate(rewards, axis=0) # [T,] 
         terminals = np.concatenate(terminals, axis=0) # [T,] 
-        
-        print(observations.shape)
-        print(actions.shape)
-        print(rewards.shape)
-        print(terminals.shape)
 
         # Create dataset
         dataset = MDPDataset(
@@ -84,10 +82,13 @@ class TrainerOracle:
         )
 
         # Create BCQ config
-        config = BCQConfig()
+        config = BCQConfig(
+            batch_size=self.config.bcq_batch_size,
+            gamma=self.config.discount_factor
+        )
 
         # Build BCQ from config
-        self.bcq = config.create(device="cpu:0")
+        self.bcq = config.create(device=self.config.bcq_device)
 
         print(f"Training BCQ for {epochs} epochs...")
         self.bcq.fit(dataset, n_steps=epochs, show_progress=True)
