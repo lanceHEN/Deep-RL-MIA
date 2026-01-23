@@ -65,10 +65,15 @@ class TrainerOracle:
             rewards.append(traj["rewards"])
             terminals.append(traj["terminals"])
 
-        observations = np.concatenate(observations, axis=0)
-        actions = np.concatenate(actions, axis=0)
-        rewards = np.concatenate(rewards, axis=0)
-        terminals = np.concatenate(terminals, axis=0)
+        observations = np.concatenate(observations, axis=0) # [T, state_dim]
+        actions = np.concatenate(actions, axis=0) # [T, action_dim] 
+        rewards = np.concatenate(rewards, axis=0) # [T,] 
+        terminals = np.concatenate(terminals, axis=0) # [T,] 
+        
+        print(observations.shape)
+        print(actions.shape)
+        print(rewards.shape)
+        print(terminals.shape)
 
         # Create dataset
         dataset = MDPDataset(

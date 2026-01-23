@@ -142,12 +142,19 @@ class DataFormatter:
         """
         stacked_trajs = []
         for traj, output_traj in zip(trajectories, output_trajectories):
-            traj_actions = DataFormatter._set_action_length(traj["actions"], T_max)
+            # Note here we transpose to get shape [action_dim, T_max]. That way,
+            # by vertically stacking we get the [2*action_dim, T_max] shape used
+            # in the paper
+            traj_actions = DataFormatter._set_action_length(traj["actions"], T_max) # [T_max, action_dim]
+            
             output_traj_actions = DataFormatter._set_action_length(
                 output_traj["actions"], T_max
-            )
+            ) # [T_max, action_dim]
+            
+            traj_actions = np.swapaxes(traj_actions, 0, 1) # Swapaxes allows use with 2-d and 3-d
+            output_traj_actions = np.swapaxes(output_traj_actions, 0, 1)
 
-            # Vertically stack traj and output traj
+            # Vertically stack traj and output traj to get the [2*action_dim, T_max,...] shape
             stacked_trajs.append(np.vstack((traj_actions, output_traj_actions)))
 
         return np.array(stacked_trajs), np.full((len(stacked_trajs)), label)

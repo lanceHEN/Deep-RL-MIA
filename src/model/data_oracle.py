@@ -95,10 +95,10 @@ class DataOracle:
 
             trajectories.append(
                 {
-                    "states": np.array(states),
-                    "actions": np.array(actions),
-                    "rewards": np.array(rewards),
-                    "terminals": terminals,
+                    "states": np.array(states), # [T, state_dim]
+                    "actions": np.array(actions), # [T, action_dim]
+                    "rewards": np.array(rewards), # [T,]
+                    "terminals": terminals, # [T,]
                 }
             )
 
