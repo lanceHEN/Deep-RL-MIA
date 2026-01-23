@@ -7,6 +7,7 @@ import numpy as np
 
 from config import TrainerOracleConfig
 
+
 class TrainerOracle:
     """
     The TrainerOracle class is an implementation of the Training Oracle.
@@ -68,10 +69,10 @@ class TrainerOracle:
             rewards.append(traj["rewards"])
             terminals.append(traj["terminals"])
 
-        observations = np.concatenate(observations, axis=0) # [T, state_dim]
-        actions = np.concatenate(actions, axis=0) # [T, action_dim] 
-        rewards = np.concatenate(rewards, axis=0) # [T,] 
-        terminals = np.concatenate(terminals, axis=0) # [T,] 
+        observations = np.concatenate(observations, axis=0)  # [T, state_dim]
+        actions = np.concatenate(actions, axis=0)  # [T, action_dim]
+        rewards = np.concatenate(rewards, axis=0)  # [T,]
+        terminals = np.concatenate(terminals, axis=0)  # [T,]
 
         # Create dataset
         dataset = MDPDataset(
@@ -83,8 +84,7 @@ class TrainerOracle:
 
         # Create BCQ config
         config = BCQConfig(
-            batch_size=self.config.bcq_batch_size,
-            gamma=self.config.discount_factor
+            batch_size=self.config.bcq_batch_size, gamma=self.config.discount_factor
         )
 
         # Build BCQ from config
@@ -140,7 +140,7 @@ class TrainerOracle:
                 # Get the action
                 # Must add batch dim for bcq implementation
                 action = self.bcq.predict(np.expand_dims(current_state, axis=0))
-                
+
                 # Outputted ction will likewise have batch dim, so reshape back to
                 # [action_dim,]
                 action = action.reshape(-1)

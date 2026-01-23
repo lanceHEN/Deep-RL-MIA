@@ -6,6 +6,7 @@ import numpy as np
 
 from config import DataOracleConfig
 
+
 class DataOracle:
     """
     An implementation of the Data Oracle. This will interact with a
@@ -33,12 +34,18 @@ class DataOracle:
 
         # Initialize DDPG with the given env
         self.policy = DDPG(
-            "MlpPolicy", self.env, verbose=self.config.ddpg_verbose, buffer_size=self.config.ddpg_buffer_size, learning_starts=self.config.ddpg_learning_starts
+            "MlpPolicy",
+            self.env,
+            verbose=self.config.ddpg_verbose,
+            buffer_size=self.config.ddpg_buffer_size,
+            learning_starts=self.config.ddpg_learning_starts,
         )
 
         # Learn for some steps.
         print("Learning DDPG policy for data oracle.")
-        self.policy.learn(total_timesteps=self.config.ddpg_learn_timesteps, progress_bar=True)
+        self.policy.learn(
+            total_timesteps=self.config.ddpg_learn_timesteps, progress_bar=True
+        )
         print("Finished learning DDPG policy")
 
     def collect_trajectories(
@@ -98,10 +105,10 @@ class DataOracle:
 
             trajectories.append(
                 {
-                    "states": np.array(states), # [T, state_dim]
-                    "actions": np.array(actions), # [T, action_dim]
-                    "rewards": np.array(rewards), # [T,]
-                    "terminals": terminals, # [T,]
+                    "states": np.array(states),  # [T, state_dim]
+                    "actions": np.array(actions),  # [T, action_dim]
+                    "rewards": np.array(rewards),  # [T,]
+                    "terminals": terminals,  # [T,]
                 }
             )
 

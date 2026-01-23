@@ -15,6 +15,7 @@ from torchvision.models import resnet18
 
 from config import IndividualAttackTrainerConfig, CollectiveAttackTrainerConfig
 
+
 class AttackTrainer(ABC):
     """
     An abstracted version of attack trainers for individual or collective modes
@@ -153,10 +154,7 @@ class IndividualAttackTrainer(AttackTrainer):
         grad_clip (float): Threshold value for gradient clipping.
     """
 
-    def __init__(
-        self,
-        config: IndividualAttackTrainerConfig
-    ):
+    def __init__(self, config: IndividualAttackTrainerConfig):
         """
         Initializes an IndividualAttackTrainer with the given config.
 
@@ -164,16 +162,21 @@ class IndividualAttackTrainer(AttackTrainer):
             config (IndividualAttackTrainerConfig): Stores config info.
         """
         super().__init__(config.action_dim, config.T_max)
-        
+
         self.config = config
 
         self._classifier = IndividualAttackClassifier(
-            self.config.action_dim, self.config.num_channels, self.config.kernel_size, self.config.dropout
+            self.config.action_dim,
+            self.config.num_channels,
+            self.config.kernel_size,
+            self.config.dropout,
         )
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
-            self._optimizer, self.config.scheduler_step, gamma=self.config.scheduler_decay
+            self._optimizer,
+            self.config.scheduler_step,
+            gamma=self.config.scheduler_decay,
         )
         self._grad_clip = self.config.grad_clip
 
@@ -233,10 +236,7 @@ class CollectiveAttackTrainer(AttackTrainer):
         grad_clip (float): Threshold value for gradient clipping.
     """
 
-    def __init__(
-        self,
-        config: CollectiveAttackTrainerConfig
-    ):
+    def __init__(self, config: CollectiveAttackTrainerConfig):
         """
         Initializes an IndividualAttackTrainer with the given config.
 
@@ -244,14 +244,16 @@ class CollectiveAttackTrainer(AttackTrainer):
             config (IndividualAttackTrainer): Stores config info.
         """
         super().__init__(config.action_dim, config.T_max)
-        
+
         self.config = config
 
         self._classifier = CollectiveAttackClassifier(self.config.action_dim)
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
-            self._optimizer, self.config.scheduler_step, gamma=self.config.scheduler_decay
+            self._optimizer,
+            self.config.scheduler_step,
+            gamma=self.config.scheduler_decay,
         )
         self._grad_clip = self.config.grad_clip
 
@@ -366,5 +368,5 @@ class CollectiveAttackClassifier(nn.Module):
     def forward(self, x):
         # x: [B, 2d_A, T, m]
         x = self.resnet(x)
-        x = self.fc(x) # [B,]
+        x = self.fc(x)  # [B,]
         return self.sigmoid(x)
