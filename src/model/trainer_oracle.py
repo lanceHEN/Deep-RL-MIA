@@ -132,7 +132,12 @@ class TrainerOracle:
 
             for _ in range(T_max):
                 # Get the action
-                action = self.bcq.predict(current_state)
+                # Must add batch dim for bcq implementation
+                action = self.bcq.predict(np.expand_dims(current_state, axis=0))
+                
+                # Outputted ction will likewise have batch dim, so reshape back to
+                # [action_dim,]
+                action = action.reshape(-1)
 
                 # Step through environment
                 next_state, reward, done, _, _ = self.env.step(action)
