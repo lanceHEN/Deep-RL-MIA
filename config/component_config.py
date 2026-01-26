@@ -3,38 +3,46 @@ This module provides several dataclasses for modular configuration of different
 components in the Deep RL MIA pipeline.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
+
+import gymnasium as gym
+
 
 @dataclass
 class DataOracleConfig:
     """
     Stores config info for DataOracle.
     """
-    env_name: str
+
+    env: gym.Env
     ddpg_verbose: int = 0
     ddpg_buffer_size: int = 10000
     ddpg_learning_starts: int = 1000
     ddpg_learn_timesteps: int = 200000
-    
+
+
 @dataclass
 class TrainerOracleConfig:
     """
     Stores config info for DataOracle.
     """
-    env_name: str
+
+    env: gym.Env
     bcq_device: str = "cpu:0"
     bcq_batch_size: int = 100
     discount_factor: float = 0.99
+
 
 @dataclass
 class IndividualAttackTrainerConfig:
     """
     Stores config info for IndividualAttackTrainer.
     """
+
     action_dim: int
     T_max: int
-    num_channels: List = [600, 600]
+    num_channels: List = field(default_factory=lambda: [600, 600])
     kernel_size: int = 3
     dropout: float = 0.45
     lr: float = 0.0003
@@ -42,11 +50,13 @@ class IndividualAttackTrainerConfig:
     scheduler_step = 100
     scheduler_decay = 0.1
 
+
 @dataclass
 class CollectiveAttackTrainerConfig:
     """
     Stores config info for CollectiveAttackTrainer.
     """
+
     action_dim: int
     T_max: int
     dropout: float = 0.0

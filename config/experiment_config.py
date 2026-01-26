@@ -5,6 +5,8 @@ This module provides a dataclass to configure an entire experiment.
 from dataclasses import dataclass
 from typing import Union
 
+import gymnasium as gym
+
 from .component_config import (
     IndividualAttackTrainerConfig,
     CollectiveAttackTrainerConfig,
@@ -16,8 +18,14 @@ class ExperimentConfig:
     """
     Stores all config info necessary for running an MIA experiment.
     """
+    
+    # Individual / collective attack trainer info
+    individual_attack: bool
+    attack_trainer_config: Union[
+        IndividualAttackTrainerConfig, CollectiveAttackTrainerConfig
+    ]
 
-    env_name: str
+    env: gym.Env
     T_max: int
     train_trajs: int = 1000
     train_seed: int = None
@@ -37,9 +45,3 @@ class ExperimentConfig:
     trainer_oracle_bcq_device: str = "cpu:0"
     trainer_oracle_bcq_batch_size: int = 100
     trainer_oracle_discount_factor: float = 0.99
-
-    # Individual / collective attack trainer info
-    individual_attack: bool
-    attack_trainer_config: Union[
-        IndividualAttackTrainerConfig, CollectiveAttackTrainerConfig
-    ]
