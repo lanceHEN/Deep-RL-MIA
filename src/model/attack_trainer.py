@@ -25,12 +25,15 @@ class AttackTrainer(ABC):
     Attributes:
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
+        classification_threshold (float): Minimum probability for a
+            positive classification.
     """
 
     def __init__(
         self,
         action_dim: int,
         T_max: int,
+        classification_threshold: float = 0.5
     ):
         """
         Initializes an AttackTrainer with the given action dimension, max
@@ -44,6 +47,7 @@ class AttackTrainer(ABC):
         """
         self.action_dim = action_dim
         self.T_max = T_max
+        self.classification_threshold = classification_threshold
 
     @property
     @abstractmethod
@@ -123,10 +127,12 @@ class AttackTrainer(ABC):
                 or [n_samples, 2 * action_dim, T_max, minibatch_size, depending on
                 whether in individual or collective mode.  Note only actions are stored.
         Returns:
-            np.ndarray: [n_samples,] array of predicted probabilities for the trajectory
-                stacks.
+            np.ndarray: [n_samples,] array of predictions for the trajectory
+                stacks, using classification_threshold to round up or down
+                (if prob < classification_threshold round down, else round up).
         """
-        return self.classifier(torch.from_numpy(stacked_trajectories)).numpy()
+        raw = self.classifier(torch.from_numpy(stacked_trajectories)).numpy()
+        return np.where(raw < self.classification_threshold, 0.0, 1.0)
 
     @staticmethod
     def _make_dataloader(
@@ -149,6 +155,8 @@ class IndividualAttackTrainer(AttackTrainer):
         config (IndividualAttackTrainerConfig): Stores config info.
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
+        classification_threshold (float): Minimum probability for a
+            positive classification.
         classifier (nn.Module): The attack classifier to train.
         criterion (nn.Module): BCE Loss.
         optimizer (torch.optim.Optimizer): Adam optimizer.
@@ -164,7 +172,7 @@ class IndividualAttackTrainer(AttackTrainer):
         Args:
             config (IndividualAttackTrainerConfig): Stores config info.
         """
-        super().__init__(config.action_dim, config.T_max)
+        super().__init__(config.action_dim, config.T_max, config.classification_threshold)
 
         self.config = config
 
@@ -231,6 +239,8 @@ class CollectiveAttackTrainer(AttackTrainer):
     Attributes:
         action_dim (int): Dimension of action space.
         T_max (int): Max trajectory length.
+        classification_threshold (float): Minimum probability for a
+            positive classification.
         classifier (nn.Module): The attack classifier to train.
         criterion (nn.Module): BCE Loss.
         optimizer (torch.optim.Optimizer): Adam optimizer.
@@ -246,7 +256,7 @@ class CollectiveAttackTrainer(AttackTrainer):
         Args:
             config (IndividualAttackTrainer): Stores config info.
         """
-        super().__init__(config.action_dim, config.T_max)
+        super().__init__(config.action_dim, config.T_max, config.classification_threshold)
 
         self.config = config
 
