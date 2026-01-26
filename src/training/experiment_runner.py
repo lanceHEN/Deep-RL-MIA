@@ -7,6 +7,8 @@ from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score
 
 root_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(root_dir))
@@ -48,13 +50,11 @@ class ExperimentRunner:
         self.config = config
 
     def run_experiment(self):
-        # Initialize env
-        env = gym.make(self.config.env_name)
 
         # Initialize Data Oracle
         data_oracle = DataOracle(
             DataOracleConfig(
-                self.config.env_name,
+                self.config.env,
                 self.config.data_oracle_ddpg_verbose,
                 self.config.data_oracle_ddpg_buffer_size,
                 self.config.data_oracle_ddpg_learning_starts,
@@ -70,7 +70,7 @@ class ExperimentRunner:
         # Initialize Trainer Oracle
         trainer_oracle = TrainerOracle(
             TrainerOracleConfig(
-                self.config.env_name,
+                self.config.env,
                 self.config.trainer_oracle_bcq_device,
                 self.config.trainer_oracle_bcq_batch_size,
                 self.config.trainer_oracle_discount_factor,
@@ -128,6 +128,9 @@ class ExperimentRunner:
         )
         all_pairs = np.vstack((positive_pairs, negative_pairs))
         all_labels = np.concatenate((positive_labels, negative_labels))
+        
+        train_pairs, test_pairs, train_labels, test_labels = train_test_split(all_pairs, all_labels, test_size=self.config.attack_trainer_train_test_split_test_size,
+                                                                              random_state=self.config.attack_trainer_train_test_split_seed)
 
         # Initialize attack trainer
         if self.config.individual_attack:
@@ -138,10 +141,49 @@ class ExperimentRunner:
         # Train on positive and negative pairs. NOTE that they do not need to be
         # shuffled.
         attack_trainer.train(
-            all_pairs,
-            all_labels,
+            train_pairs,
+            train_labels,
             epochs=self.config.attack_trainer_epochs,
             batch_size=self.config.attack_trainer_batch_size,
         )
 
-        predictions = attack_trainer.predict(all_pairs)
+        test_preds = attack_trainer.predict(test_pairs)
+        
+        print(test_labels.shape)
+        print(test_preds.shape)
+        
+        print(f"Accuracy: {100*accuracy_score(test_labels, test_preds)}%")
+
+
+attack_trainer_config = IndividualAttackTrainerConfig(
+    action_dim=3,
+    T_max=100,
+    classification_threshold=0.5
+)
+
+config = ExperimentConfig(
+    individual_attack=True,
+    attack_trainer_config=attack_trainer_config,
+    env=gym.make("Hopper-v5"),
+    T_max=100,
+    train_trajs=2,
+    train_seed=1,
+    external_trajs=2,
+    external_seed=2,
+    output_seed=3,
+    attack_trainer_epochs=1,
+    attack_trainer_train_test_split_seed=4,
+    attack_trainer_train_test_split_test_size=0.2,
+    attack_trainer_batch_size=16,
+    data_oracle_ddpg_verbose=0,
+    data_oracle_ddpg_buffer_size=10000,
+    data_oracle_ddpg_learning_starts=10,
+    data_oracle_ddpg_learn_timesteps=20,
+    trainer_oracle_bcq_device="cpu:0",
+    trainer_oracle_bcq_batch_size=100,
+    trainer_oracle_discount_factor=0.99,
+)
+
+experiment_runner = ExperimentRunner(config)
+
+experiment_runner.run_experiment()
