@@ -126,6 +126,8 @@ class TrainerOracle:
 
         if seed is not None:
             self.env.reset(seed=seed)
+            
+        print("Fetching output trajectories")
 
         trajectories = []
 
@@ -170,5 +172,5 @@ class TrainerOracle:
                     "terminals": terminals,
                 }
             )
-
+        print("Finished fetching output trajectories")
         return trajectories

@@ -87,6 +87,7 @@ class AttackTrainer(ABC):
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
+        print("Training attack classifier")
         train_loader = self._make_dataloader(
             stacked_trajectories, train_labels, batch_size
         )
@@ -108,6 +109,8 @@ class AttackTrainer(ABC):
                 )
 
                 self.optimizer.step()
+                
+        print("Finished training attack classifier")
 
     @torch.no_grad()
     def predict(self, stacked_trajectories: np.ndarray) -> np.ndarray:
@@ -172,7 +175,7 @@ class IndividualAttackTrainer(AttackTrainer):
             self.config.dropout,
         )
         self._criterion = nn.BCELoss()
-        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
+        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=self.config.lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
             self._optimizer,
             self.config.scheduler_step,
@@ -249,7 +252,7 @@ class CollectiveAttackTrainer(AttackTrainer):
 
         self._classifier = CollectiveAttackClassifier(self.config.action_dim)
         self._criterion = nn.BCELoss()
-        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=lr)
+        self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=self.config.lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
             self._optimizer,
             self.config.scheduler_step,

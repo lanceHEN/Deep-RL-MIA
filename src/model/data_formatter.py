@@ -21,7 +21,7 @@ class DataFormatter:
         else:
             last_action = actions[-1]
             actions = np.concatenate(
-                actions, np.full((T_max - n, len(last_action)), last_action)
+                (actions, np.full((T_max - n, len(last_action)), last_action))
             )
 
             return actions
