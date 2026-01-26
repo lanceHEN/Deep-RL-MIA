@@ -29,6 +29,8 @@ class ExperimentConfig:
     T_max: int
     train_trajs: int = 1000
     train_seed: int = None
+    attack_trainer_train_test_split_seed: int = None
+    attack_trainer_train_test_split_test_size: float = 0.2
     external_trajs: int = 1000
     external_seed: int = None
     output_seed: int = None

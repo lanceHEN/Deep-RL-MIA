@@ -42,6 +42,7 @@ class IndividualAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    classification_threshold: float = 0.5
     num_channels: List = field(default_factory=lambda: [600, 600])
     kernel_size: int = 3
     dropout: float = 0.45
@@ -59,6 +60,7 @@ class CollectiveAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    classification_threshold: float = 0.5
     dropout: float = 0.0
     lr: float = 0.0008
     grad_clip: float = 0.35
