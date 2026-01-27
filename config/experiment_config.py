@@ -24,6 +24,7 @@ class ExperimentConfig:
     attack_trainer_config: Union[
         IndividualAttackTrainerConfig, CollectiveAttackTrainerConfig
     ]
+    collective_batch_size: int
 
     env: gym.Env
     T_max: int
@@ -44,6 +45,7 @@ class ExperimentConfig:
     data_oracle_ddpg_learn_timesteps: int = 200000
 
     # Trainer Oracle info
+    trainer_oracle_bcq_epochs: int = 100000
     trainer_oracle_bcq_device: str = "cpu:0"
     trainer_oracle_bcq_batch_size: int = 100
     trainer_oracle_discount_factor: float = 0.99
