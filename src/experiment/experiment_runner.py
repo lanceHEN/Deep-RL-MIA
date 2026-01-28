@@ -78,11 +78,11 @@ class ExperimentRunner:
         )
 
         # Train for some epochs
-        trainer_oracle.train(train_trajectories, epochs=2)
+        trainer_oracle.train(train_trajectories, epochs=self.config.trainer_oracle_bcq_epochs)
 
         # Get some external trajectories - use train_trajectories to ensure different.
         external_trajectories = data_oracle.collect_external_trajectories(
-            train_trajectories, self.config.external_trajs, self.config.T_max, self.config.external_seed
+            train_trajectories, self.config.external_trajs, self.config.T_max, self.config.external_train_tolerance, self.config.external_seed
         )
 
         # Get output trajectories from trainer oracle.
@@ -97,7 +97,7 @@ class ExperimentRunner:
             [traj["states"][0] for traj in external_trajectories]
         )  # [external_trajs, state_dim]
 
-        # Then get each output trajectory type
+        # Then get each output trajectory
         train_output_trajectories = trainer_oracle.get_output_trajectories(
             train_initial_states, T_max=self.config.T_max, seed=self.config.output_seed
         )  # [train_trajs,]
@@ -178,9 +178,10 @@ def main():
         collective_batch_size=50,
         env=gym.make("Hopper-v5"),
         T_max=100,
-        train_trajs=1000,
+        train_trajs=3000,
         train_seed=1,
-        external_trajs=1000,
+        external_trajs=3000,
+        external_train_tolerance=1e-6,
         external_seed=2,
         output_seed=3,
         attack_trainer_epochs=100,
@@ -189,9 +190,9 @@ def main():
         attack_trainer_batch_size=16,
         data_oracle_ddpg_verbose=0,
         data_oracle_ddpg_buffer_size=10000,
-        data_oracle_ddpg_learning_starts=10,
-        data_oracle_ddpg_learn_timesteps=10,
-        trainer_oracle_bcq_epochs=2,
+        data_oracle_ddpg_learning_starts=1000,
+        data_oracle_ddpg_learn_timesteps=200000,
+        trainer_oracle_bcq_epochs=100000,
         trainer_oracle_bcq_device="cpu:0",
         trainer_oracle_bcq_batch_size=100,
         trainer_oracle_discount_factor=0.99,
