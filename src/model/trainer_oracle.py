@@ -136,6 +136,10 @@ class TrainerOracle:
             actions = []
             rewards = []
 
+            # CRITICAL: must actually set env to have the initial state!
+            # Assumes env has set_state method
+            self.env.unwrapped.set_state(initial_state)
+
             current_state = initial_state
 
             for _ in range(T_max):
@@ -155,10 +159,11 @@ class TrainerOracle:
                 rewards.append(reward)
 
                 if done:
-                    states.append(next_state)
                     break
 
                 current_state = next_state
+            
+            states.append(next_state)
 
             T = len(actions)
             terminals = np.zeros(T, dtype=np.float32)
