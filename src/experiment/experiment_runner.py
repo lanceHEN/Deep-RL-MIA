@@ -169,6 +169,7 @@ def main():
     attack_trainer_config = IndividualAttackTrainerConfig(
         action_dim=3,
         T_max=100,
+        device="mps",
         classification_threshold=0.5
     )
 
@@ -193,7 +194,7 @@ def main():
         data_oracle_ddpg_learning_starts=1000,
         data_oracle_ddpg_learn_timesteps=200000,
         trainer_oracle_bcq_epochs=100000,
-        trainer_oracle_bcq_device="cpu:0",
+        trainer_oracle_bcq_device="mps:0",
         trainer_oracle_bcq_batch_size=100,
         trainer_oracle_discount_factor=0.99,
     )

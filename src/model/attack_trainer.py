@@ -100,11 +100,14 @@ class AttackTrainer(ABC):
 
         for _ in range(epochs):
             for inputs, labels in train_loader:
+                inputs = inputs.to(self.device)
+                labels = labels.to(self.device)
+                
                 self.optimizer.zero_grad()
 
                 out = self.classifier(inputs)
 
-                loss = self.criterion(out, labels.to(out.dtype))
+                loss = self.criterion(out, labels)
 
                 loss.backward()
                 # Gradient clipping
@@ -131,7 +134,8 @@ class AttackTrainer(ABC):
                 stacks, using classification_threshold to round up or down
                 (if prob < classification_threshold round down, else round up).
         """
-        raw = self.classifier(torch.from_numpy(stacked_trajectories)).numpy()
+        inputs = torch.from_numpy(stacked_trajectories).to(self.device)
+        raw = self.classifier(inputs).cpu().numpy()
         return np.where(raw < self.classification_threshold, 0.0, 1.0)
 
     @staticmethod
@@ -142,7 +146,7 @@ class AttackTrainer(ABC):
         Produces a torch DataLoader shuffled over the given trajectories and labels.
         """
         dataset = TensorDataset(
-            torch.from_numpy(stacked_trajectories), torch.from_numpy(train_labels)
+            torch.from_numpy(stacked_trajectories), torch.from_numpy(train_labels).float()
         )
         return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -175,13 +179,15 @@ class IndividualAttackTrainer(AttackTrainer):
         super().__init__(config.action_dim, config.T_max, config.classification_threshold)
 
         self.config = config
+        
+        self._device = self.config.device
 
         self._classifier = IndividualAttackClassifier(
             self.config.action_dim,
             self.config.num_channels,
             self.config.kernel_size,
             self.config.dropout,
-        )
+        ).to(self.device)
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=self.config.lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
@@ -190,6 +196,10 @@ class IndividualAttackTrainer(AttackTrainer):
             gamma=self.config.scheduler_decay,
         )
         self._grad_clip = self.config.grad_clip
+        
+    @property
+    def device(self):
+        return self._device
 
     @property
     def classifier(self) -> nn.Module:
@@ -210,6 +220,10 @@ class IndividualAttackTrainer(AttackTrainer):
     @property
     def grad_clip(self) -> float:
         return self._grad_clip
+    
+    @device.setter
+    def device(self, device):
+        self._device = device
 
     @classifier.setter
     def classifier(self, clf):
@@ -259,8 +273,10 @@ class CollectiveAttackTrainer(AttackTrainer):
         super().__init__(config.action_dim, config.T_max, config.classification_threshold)
 
         self.config = config
+        
+        self._device = self.config.device
 
-        self._classifier = CollectiveAttackClassifier(self.config.action_dim)
+        self._classifier = CollectiveAttackClassifier(self.config.action_dim).to(self.device)
         self._criterion = nn.BCELoss()
         self._optimizer = torch.optim.Adam(self._classifier.parameters(), lr=self.config.lr)
         self._scheduler = torch.optim.lr_scheduler.StepLR(
@@ -269,6 +285,10 @@ class CollectiveAttackTrainer(AttackTrainer):
             gamma=self.config.scheduler_decay,
         )
         self._grad_clip = self.config.grad_clip
+        
+    @property
+    def device(self):
+        return self._device
 
     @property
     def classifier(self) -> nn.Module:
@@ -289,6 +309,10 @@ class CollectiveAttackTrainer(AttackTrainer):
     @property
     def grad_clip(self) -> float:
         return self._grad_clip
+    
+    @device.setter
+    def device(self, device):
+        self._device = device
 
     @classifier.setter
     def classifier(self, clf):

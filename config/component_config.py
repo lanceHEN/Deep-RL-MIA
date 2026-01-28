@@ -25,7 +25,7 @@ class DataOracleConfig:
 @dataclass
 class TrainerOracleConfig:
     """
-    Stores config info for DataOracle.
+    Stores config info for TrainerOracle.
     """
 
     env: gym.Env
@@ -42,6 +42,7 @@ class IndividualAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    device: str = "mps"
     classification_threshold: float = 0.5
     num_channels: List = field(default_factory=lambda: [600, 600])
     kernel_size: int = 3
@@ -60,6 +61,7 @@ class CollectiveAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    device: str = "mps"
     classification_threshold: float = 0.5
     dropout: float = 0.0
     lr: float = 0.0008
