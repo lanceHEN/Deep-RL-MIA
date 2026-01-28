@@ -117,6 +117,8 @@ class AttackTrainer(ABC):
 
                 self.optimizer.step()
                 
+            self.scheduler.step()
+                
         print("Finished training attack classifier")
 
     @torch.no_grad()
