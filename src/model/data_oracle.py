@@ -176,7 +176,7 @@ class DataOracle:
             # Check not in train_trajectories
             for train_traj in train_trajectories:
                 if len(train_traj["actions"]) == len(actions):
-                    if np.allclose(actions, train_traj["actions"], atol=1e-6) and np.allclose(states, train_traj["states"], atol=train_tolerance):
+                    if np.allclose(actions, train_traj["actions"], atol=train_tolerance) and np.allclose(states, train_traj["states"], atol=train_tolerance):
                         skip = True
                         print("Skipping generated trajectory because it is identical to a training one")
                         break
