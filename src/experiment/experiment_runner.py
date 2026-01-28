@@ -99,13 +99,13 @@ class ExperimentRunner:
 
         # Then get each output trajectory
         train_output_trajectories = trainer_oracle.get_output_trajectories(
-            train_initial_states, T_max=self.config.T_max, seed=self.config.output_seed
+            train_initial_states, T_max=self.config.T_max, seed=self.config.train_output_seed
         )  # [train_trajs,]
 
         external_output_trajectories = trainer_oracle.get_output_trajectories(
             external_initial_states,
             T_max=self.config.T_max,
-            seed=self.config.output_seed,
+            seed=self.config.external_output_seed,
         )  # [external_trajs,]
 
         # Initialize data formatter
