@@ -35,7 +35,8 @@ class ExperimentConfig:
     external_trajs: int = 1000
     external_train_tolerance: float = 1e-6
     external_seed: int = None
-    output_seed: int = None
+    train_output_seed: int = None
+    external_output_seed: int = None
     attack_trainer_epochs: int = 100
     attack_trainer_batch_size: int = 16
 
