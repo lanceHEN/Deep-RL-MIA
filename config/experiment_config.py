@@ -33,6 +33,7 @@ class ExperimentConfig:
     attack_trainer_train_test_split_seed: int = None
     attack_trainer_train_test_split_test_size: float = 0.2
     external_trajs: int = 1000
+    external_train_tolerance: float = 1e-6
     external_seed: int = None
     output_seed: int = None
     attack_trainer_epochs: int = 100

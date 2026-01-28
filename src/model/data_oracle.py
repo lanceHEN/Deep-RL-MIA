@@ -136,6 +136,7 @@ class DataOracle:
         train_trajectories: List[Dict[str, np.ndarray]],
         n_trajectories: int,
         T_max: int,
+        train_tolerance: float = 1e-6,
         seed: int = None
     ) -> List[Dict[str, np.ndarray]]:
         """
@@ -148,6 +149,9 @@ class DataOracle:
                 trajectories to ensure no duplicates are made from them.
             n_trajectories (int): Number of trajectories to generate.
             T_max (int): Maximal number of steps in a trajectory.
+            train_tolerance (float): How close each state and action must be
+                between and external and training trajectory for the external
+                to be a duplicate.
             seed (int): Optional random seed for reproducibility.
 
         Returns:
@@ -172,7 +176,7 @@ class DataOracle:
             # Check not in train_trajectories
             for train_traj in train_trajectories:
                 if len(train_traj["actions"]) == len(actions):
-                    if np.allclose(actions, train_traj["actions"], atol=1e-6) and np.allclose(states, train_traj["states"], atol=1e-6):
+                    if np.allclose(actions, train_traj["actions"], atol=1e-6) and np.allclose(states, train_traj["states"], atol=train_tolerance):
                         skip = True
                         print("Skipping generated trajectory because it is identical to a training one")
                         break
