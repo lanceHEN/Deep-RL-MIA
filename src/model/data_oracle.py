@@ -53,13 +53,16 @@ class DataOracle:
     def _gen_trajectory(self, T_max: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Generates a single trajectory, returning numpy arrays for states, actions,
-        and rewards.
+        rewards, initial position, and initial velocity.
         """
         states = []
         actions = []
         rewards = []
 
         current_state = self.env.reset()[0]  # Always start a new episode.
+        
+        qpos = self.env.unwrapped.data.qpos.copy()
+        qvel = self.env.unwrapped.data.qvel.copy()
 
         for _ in range(T_max):
             # print(current_state)
@@ -83,7 +86,7 @@ class DataOracle:
         actions = np.array(actions)
         rewards = np.array(rewards)
             
-        return states, actions, rewards
+        return states, actions, rewards, qpos, qvel
 
     def collect_training_trajectories(
         self, n_trajectories: int, T_max: int, seed: int = None
@@ -101,8 +104,10 @@ class DataOracle:
             List[Dict[str, np.ndarray]]: List of trajectories, where each trajectory
                 contains an a 'states' key mapping to a [T, state_dim] array of states,
                 a 'actions' key mapping to a [T, action_dim] array of actions,
-                a 'rewards' key mapping to a [T,] array of rewards, and a 'terminals'
-                key mapping to whether each transition was the last one or not.
+                a 'rewards' key mapping to a [T,] array of rewards, a 'terminals'
+                key mapping to whether each transition was the last one or not,
+                a 'qpos' key mapping to initial state position, and a 'qvel' key
+                mapping to initial state velocity.
         """
         print(f"Generating {n_trajectories} training trajectories.")
         if seed is not None:  # For reuse
@@ -111,7 +116,7 @@ class DataOracle:
 
         trajectories = []
         for _ in range(n_trajectories):
-            states, actions, rewards = self._gen_trajectory(T_max)
+            states, actions, rewards, qpos, qvel = self._gen_trajectory(T_max)
 
             # Create terminal flags array
             T = len(actions)
@@ -125,6 +130,8 @@ class DataOracle:
                     "actions": actions,  # [T, action_dim]
                     "rewards": rewards,  # [T,]
                     "terminals": terminals,  # [T,]
+                    "qpos": qpos, # [pos_dim,]
+                    "qvel": qvel # [vel_dim,]
                 }
             )
 
@@ -159,8 +166,10 @@ class DataOracle:
                 anything in train_trajectories by at least one state or action, where each trajectory
                 contains an a 'states' key mapping to a [T, state_dim] array of states,
                 a 'actions' key mapping to a [T, action_dim] array of actions,
-                a 'rewards' key mapping to a [T,] array of rewards, and a 'terminals'
-                key mapping to whether each transition was the last one or not.
+                a 'rewards' key mapping to a [T,] array of rewards, a 'terminals'
+                key mapping to whether each transition was the last one or not,
+                a 'qpos' key mapping to initial state position, and a 'qvel' key
+                mapping to initial state velocity.
         """
         print(f"Generating {n_trajectories} external trajectories.")
         if seed is not None:  # For reuse
@@ -170,7 +179,7 @@ class DataOracle:
         trajectories = []
         
         while len(trajectories) < n_trajectories:
-            states, actions, rewards = self._gen_trajectory(T_max)
+            states, actions, rewards, qpos, qvel = self._gen_trajectory(T_max)
                 
             skip = False
             # Check not in train_trajectories
@@ -195,6 +204,8 @@ class DataOracle:
                     "actions": actions,  # [T, action_dim]
                     "rewards": rewards,  # [T,]
                     "terminals": terminals,  # [T,]
+                    "qpos": qpos, # [pos_dim,]
+                    "qvel": qvel # [vel_dim,]
                 }
             )
 

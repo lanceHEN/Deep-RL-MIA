@@ -85,8 +85,10 @@ class DataFormatter:
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'actions' key mapping to a
                 [T, action_dim] array of actions, a 'rewards' key mapping to a
-                [T,] array of rewards, and a 'terminals' key mapping to whether each
-                transition was the last one or not via binary flags.
+                [T,] array of rewards, a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags, a 'qpos'
+                key mapping to initial state position, and a 'qvel' key mapping
+                to initial state velocity.
             output_trajectories (List[Dict[str, np.ndarray]]): List of output
                 trajectories of the same format as external_trajectories. Should
                 be given in the same order as external_trajectories such that the
@@ -125,12 +127,14 @@ class DataFormatter:
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'actions' key mapping to a
                 [T, action_dim] array of actions, a 'rewards' key mapping to a
-                [T,] array of rewards, and a 'terminals' key mapping to whether each
-                transition was the last one or not via binary flags.
+                [T,] array of rewards, a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags, a 'qpos'
+                key mapping to initial state position, and a 'qvel' key mapping
+                to initial state velocity.
             output_trajectories (List[Dict[str, np.ndarray]]): List of output
                 trajectories of the same format as trajectories. Should
                 be given in the same order as trajectories such that the
-                initial state of trajectories[i] is the initial state of
+                initial state (qpos and qvel) of trajectories[i] is the initial state of
                 output_trajectories[i]. This speeds up computation.
             T_max (int): Maximum trajectory length--smaller trajectories have
                 their last action repeated to get to length T_max while larger

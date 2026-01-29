@@ -50,9 +50,11 @@ class TrainerOracle:
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'actions' key mapping to a
                 [T, action_dim] array of actions, a 'rewards' key mapping to
-                a 'rewards' key mapping to a [T,] array of rewards, and a
+                a 'rewards' key mapping to a [T,] array of rewards, a
                 'terminals' key mapping to whether each transition was the
-                last one or not via binary flags.
+                last one or not via binary flags, a 'qpos' key mapping to
+                initial state position, and a 'qvel' key mapping to initial
+                state velocity.
             epochs (int): Number of epochs to train BCQ for.
         """
         # We already have the trajectories, so we just need to prepare them
@@ -96,7 +98,7 @@ class TrainerOracle:
         print("BCQ training complete!")
 
     def get_output_trajectories(
-        self, initial_states: np.ndarray, T_max: int, seed: int = None
+        self, qpos: np.ndarray, qvel: np.ndarray, T_max: int, seed: int = None
     ) -> List[Dict[str, np.ndarray]]:
         """
         Produces trajectories formed from applying the learned BCQ policy on
@@ -115,8 +117,10 @@ class TrainerOracle:
             List[Dict[str, np.ndarray]]: List of outputted trajectories,
                 where each trajectory contains an a 'states' key mapping to a
                 [T, state_dim] array of states, a 'rewards' key mapping to a [T,]
-                array of rewards, and a 'terminals' key mapping to whether each
-                transition was the last one or not via binary flags.
+                array of rewards, a 'terminals' key mapping to whether each
+                transition was the last one or not via binary flags, a 'qpos'
+                key mapping to initial state position, and a 'qvel' key mapping
+                to initial state velocity.
             epochs (int): Number of epochs to train BCQ for.
         Raises:
             RuntimeError: if train is not called before
@@ -131,16 +135,20 @@ class TrainerOracle:
 
         trajectories = []
 
-        for initial_state in initial_states:
+        for one_qpos, one_qvel in zip(qpos, qvel):
             states = []
             actions = []
             rewards = []
 
             # CRITICAL: must actually set env to have the initial state!
             # Assumes env has set_state method
-            self.env.unwrapped.set_state(initial_state)
+            
+            #print(one_qpos)
+            #print(one_qvel)
+            
+            self.env.unwrapped.set_state(one_qpos, one_qvel)
 
-            current_state = initial_state
+            current_state = self.env.unwrapped._get_obs()
 
             for _ in range(T_max):
                 # Get the action
@@ -175,6 +183,8 @@ class TrainerOracle:
                     "actions": np.array(actions),
                     "rewards": np.array(rewards),
                     "terminals": terminals,
+                    "qpos": one_qpos, # [pos_dim,]
+                    "qvel": one_qvel # [vel_dim,]
                 }
             )
         print("Finished fetching output trajectories")

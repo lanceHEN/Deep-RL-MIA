@@ -90,20 +90,28 @@ class ExperimentRunner:
         # First make initial states to generate outputs from.
         # We condition on initial state because we'd waste time making trajectories
         # with other initial states that would never be matched by the data formatteer.
-        train_initial_states = np.array(
-            [traj["states"][0] for traj in train_trajectories]
-        )  # [train_trajs, state_dim]
-        external_initial_states = np.array(
-            [traj["states"][0] for traj in external_trajectories]
-        )  # [external_trajs, state_dim]
-
+        
+        train_qpos = np.array(
+            [traj["qpos"] for traj in train_trajectories]
+        )  # [train_trajs, pos_dim]
+        train_qvel = np.array(
+            [traj["qvel"] for traj in train_trajectories]
+        )  # [train_trajs, vel_dim]
+        external_qpos = np.array(
+            [traj["qpos"] for traj in external_trajectories]
+        )  # [external_trajs, pos_dim]
+        external_qvel = np.array(
+            [traj["qvel"] for traj in external_trajectories]
+        )  # [external_trajs, vel_dim]
+        
         # Then get each output trajectory
         train_output_trajectories = trainer_oracle.get_output_trajectories(
-            train_initial_states, T_max=self.config.T_max, seed=self.config.train_output_seed
+            train_qpos, train_qvel, T_max=self.config.T_max, seed=self.config.train_output_seed
         )  # [train_trajs,]
 
         external_output_trajectories = trainer_oracle.get_output_trajectories(
-            external_initial_states,
+            external_qpos,
+            external_qvel,
             T_max=self.config.T_max,
             seed=self.config.external_output_seed,
         )  # [external_trajs,]
@@ -179,22 +187,22 @@ def main():
         collective_batch_size=50,
         env=gym.make("Hopper-v5"),
         T_max=100,
-        train_trajs=3000,
+        train_trajs=10,
         train_seed=1,
-        external_trajs=3000,
+        external_trajs=10,
         external_train_tolerance=1e-6,
         external_seed=2,
         train_output_seed=3,
         external_output_seed=4,
-        attack_trainer_epochs=100,
+        attack_trainer_epochs=1,
         attack_trainer_train_test_split_seed=4,
         attack_trainer_train_test_split_test_size=0.2,
         attack_trainer_batch_size=16,
         data_oracle_ddpg_verbose=0,
         data_oracle_ddpg_buffer_size=10000,
-        data_oracle_ddpg_learning_starts=1000,
-        data_oracle_ddpg_learn_timesteps=200000,
-        trainer_oracle_bcq_epochs=100000,
+        data_oracle_ddpg_learning_starts=10,
+        data_oracle_ddpg_learn_timesteps=10,
+        trainer_oracle_bcq_epochs=10,
         trainer_oracle_bcq_device="mps:0",
         trainer_oracle_bcq_batch_size=100,
         trainer_oracle_discount_factor=0.99,
