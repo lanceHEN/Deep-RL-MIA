@@ -77,10 +77,12 @@ class DataOracle:
             rewards.append(reward)
 
             if done:
-                states.append(next_state)
                 break
 
             current_state = next_state
+        
+        # Make sure to always add next state
+        states.append(next_state)
                 
         states = np.array(states)
         actions = np.array(actions)
