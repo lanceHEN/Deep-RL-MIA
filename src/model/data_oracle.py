@@ -50,10 +50,12 @@ class DataOracle:
         )
         print("Finished learning DDPG policy")
         
-    def _gen_trajectory(self, T_max: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _gen_trajectory(self, T_max: int, random_policy: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Generates a single trajectory, returning numpy arrays for states, actions,
         rewards, initial position, and initial velocity.
+        
+        Optionally uses a random policy instead of the DDPG policy.
         """
         states = []
         actions = []
@@ -67,7 +69,11 @@ class DataOracle:
         for _ in range(T_max):
             # print(current_state)
             # Get the action
-            action, _ = self.policy.predict(current_state)
+            if random_policy:
+                action = self.env.action_space.sample()
+            else:
+                action, _ = self.policy.predict(current_state)
+            #action = self.env.action_space.sample()  # Totally random
 
             # Step through environment
             next_state, reward, done, _, _ = self.env.step(action)
@@ -146,7 +152,8 @@ class DataOracle:
         n_trajectories: int,
         T_max: int,
         train_tolerance: float = 1e-6,
-        seed: int = None
+        seed: int = None,
+        random_policy: bool = False
     ) -> List[Dict[str, np.ndarray]]:
         """
         Performs the same as collect_training_trajectories, except it also
@@ -162,6 +169,7 @@ class DataOracle:
                 between and external and training trajectory for the external
                 to be a duplicate.
             seed (int): Optional random seed for reproducibility.
+            random_policy (bool): If true, uses a random policy instead of the DDPG policy.
 
         Returns:
             List[Dict[str, np.ndarray]]: List of trajectories different from
@@ -181,7 +189,7 @@ class DataOracle:
         trajectories = []
         
         while len(trajectories) < n_trajectories:
-            states, actions, rewards, qpos, qvel = self._gen_trajectory(T_max)
+            states, actions, rewards, qpos, qvel = self._gen_trajectory(T_max, random_policy=random_policy)
                 
             skip = False
             # Check not in train_trajectories

@@ -9,6 +9,7 @@ import gymnasium as gym
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+import torch
 
 root_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(root_dir))
@@ -66,7 +67,21 @@ class ExperimentRunner:
         train_trajectories = data_oracle.collect_training_trajectories(
             self.config.train_trajs, self.config.T_max, self.config.train_seed
         )
+        
+        print("\n" + "="*60)
+        print("DIAGNOSTIC 1: TRAINING DATA QUALITY")
+        print("="*60)
 
+        # Check episode rewards
+        episode_rewards = [traj["rewards"].sum() for traj in train_trajectories[:100]]
+        print(f"Sample episode rewards: {episode_rewards[:10]}")
+        print(f"Average episode reward: {np.mean(episode_rewards):.2f}")
+        print(f"Std episode reward: {np.std(episode_rewards):.2f}")
+
+        # Check episode lengths
+        episode_lengths = [len(traj["actions"]) for traj in train_trajectories[:100]]
+        print(f"Average episode length: {np.mean(episode_lengths):.1f}")
+    
         # Initialize Trainer Oracle
         trainer_oracle = TrainerOracle(
             TrainerOracleConfig(
@@ -79,10 +94,34 @@ class ExperimentRunner:
 
         # Train for some epochs
         trainer_oracle.train(train_trajectories, epochs=self.config.trainer_oracle_bcq_epochs)
+        
+        print("\n" + "="*60)
+        print("DIAGNOSTIC 2: BCQ POLICY QUALITY")
+        print("="*60)
+    
+        total_reward = 0
+        for ep in range(10):
+            state = self.config.env.reset()[0]
+            ep_reward = 0
+        
+            for t in range(self.config.T_max):
+                action = trainer_oracle.bcq.predict(np.expand_dims(state, axis=0))
+                action = action.reshape(-1)
+                state, reward, done, _, _ = self.config.env.step(action)
+                ep_reward += reward
+            
+                if done:
+                    break
+        
+            total_reward += ep_reward
+    
+        bcq_avg_reward = total_reward / 10
+        print(f"BCQ Average Reward: {bcq_avg_reward:.2f}")
 
         # Get some external trajectories - use train_trajectories to ensure different.
         external_trajectories = data_oracle.collect_external_trajectories(
-            train_trajectories, self.config.external_trajs, self.config.T_max, self.config.external_train_tolerance, self.config.external_seed
+            train_trajectories, self.config.external_trajs, self.config.T_max, self.config.external_train_tolerance, self.config.external_seed,
+            random_policy=self.config.external_random_policy
         )
 
         # Get output trajectories from trainer oracle.
@@ -108,13 +147,43 @@ class ExperimentRunner:
         train_output_trajectories = trainer_oracle.get_output_trajectories(
             train_qpos, train_qvel, T_max=self.config.T_max, seed=self.config.train_output_seed
         )  # [train_trajs,]
-
+        
         external_output_trajectories = trainer_oracle.get_output_trajectories(
             external_qpos,
             external_qvel,
             T_max=self.config.T_max,
             seed=self.config.external_output_seed,
         )  # [external_trajs,]
+        
+        print("\n" + "="*60)
+        print("DIAGNOSTIC 3: OVERFITTING SIGNAL")
+        print("="*60)
+    
+        # Check action similarity
+        member_diffs = []
+        for i in range(min(50, len(train_trajectories))):
+            train_act = train_trajectories[i]["actions"]
+            output_act = train_output_trajectories[i]["actions"]
+        
+            min_len = min(len(train_act), len(output_act))
+            diff = np.mean(np.abs(train_act[:min_len] - output_act[:min_len]))
+            member_diffs.append(diff)
+    
+        nonmember_diffs = []
+        for i in range(min(50, len(external_trajectories))):
+            ext_act = external_trajectories[i]["actions"]
+            ext_output_act = external_output_trajectories[i]["actions"]
+        
+            min_len = min(len(ext_act), len(ext_output_act))
+            diff = np.mean(np.abs(ext_act[:min_len] - ext_output_act[:min_len]))
+            nonmember_diffs.append(diff)
+    
+        member_avg = np.mean(member_diffs)
+        nonmember_avg = np.mean(nonmember_diffs)
+    
+        print(f"Member action diff:     {member_avg:.4f} ± {np.std(member_diffs):.4f}")
+        print(f"Non-member action diff: {nonmember_avg:.4f} ± {np.std(nonmember_diffs):.4f}")
+        print(f"Ratio (member/non-member): {member_avg/nonmember_avg:.3f}")
 
         # Initialize data formatter
         data_formatter = DataFormatter
@@ -136,6 +205,22 @@ class ExperimentRunner:
         )
         all_pairs = np.vstack((positive_pairs, negative_pairs))
         all_labels = np.concatenate((positive_labels, negative_labels))
+        
+        print("\n" + "="*60)
+        print("DIAGNOSTIC 4: DATA FORMAT")
+        print("="*60)
+    
+        print(f"Pairs shape: {all_pairs.shape}")
+        print(f"Labels shape: {all_labels.shape}")
+        print(f"Positive samples: {(all_labels == 1).sum()}")
+        print(f"Negative samples: {(all_labels == 0).sum()}")
+        print(f"Label balance: {(all_labels == 1).sum() / len(all_labels):.2%}")
+    
+        # Sample a few pairs
+        print(f"\nSample pair 0:")
+        print(f"  Shape: {all_pairs[0].shape}")
+        print(f"  Label: {all_labels[0]}")
+        print(f"  Data range: [{all_pairs[0].min():.3f}, {all_pairs[0].max():.3f}]")
         
         # Batch if necessary if in collective mode
         if not self.config.individual_attack:
@@ -167,10 +252,16 @@ class ExperimentRunner:
             epochs=self.config.attack_trainer_epochs,
             batch_size=self.config.attack_trainer_batch_size,
         )
+        
+        # Check training set accuracy
+        with torch.no_grad():
+            train_acc = accuracy_score(train_labels, attack_trainer.predict(train_pairs))
+    
+        print(f"Training set accuracy: {train_acc:.2%}")
 
         test_preds = attack_trainer.predict(test_pairs)
         
-        print(f"Accuracy: {100*accuracy_score(test_labels, test_preds)}%")
+        print(f"Test set accuracy: {100*accuracy_score(test_labels, test_preds)}%")
 
 def main():
 
@@ -187,24 +278,25 @@ def main():
         collective_batch_size=50,
         env=gym.make("Hopper-v5"),
         T_max=100,
-        train_trajs=10,
+        train_trajs=500,
         train_seed=1,
-        external_trajs=10,
+        external_trajs=500,
         external_train_tolerance=1e-6,
         external_seed=2,
         train_output_seed=3,
         external_output_seed=4,
-        attack_trainer_epochs=1,
+        external_random_policy=True,
+        attack_trainer_epochs=300,
         attack_trainer_train_test_split_seed=4,
         attack_trainer_train_test_split_test_size=0.2,
-        attack_trainer_batch_size=16,
+        attack_trainer_batch_size=256,
         data_oracle_ddpg_verbose=0,
-        data_oracle_ddpg_buffer_size=10000,
-        data_oracle_ddpg_learning_starts=10,
-        data_oracle_ddpg_learn_timesteps=10,
-        trainer_oracle_bcq_epochs=10,
-        trainer_oracle_bcq_device="mps:0",
-        trainer_oracle_bcq_batch_size=100,
+        data_oracle_ddpg_buffer_size=100000,
+        data_oracle_ddpg_learning_starts=1000,
+        data_oracle_ddpg_learn_timesteps=1000000,
+        trainer_oracle_bcq_epochs=150000,
+        trainer_oracle_bcq_device="cpu:0",
+        trainer_oracle_bcq_batch_size=256,
         trainer_oracle_discount_factor=0.99,
     )
 

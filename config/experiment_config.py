@@ -37,6 +37,7 @@ class ExperimentConfig:
     external_seed: int = None
     train_output_seed: int = None
     external_output_seed: int = None
+    external_random_policy: bool = False
     attack_trainer_epochs: int = 100
     attack_trainer_batch_size: int = 16
 
