@@ -254,51 +254,50 @@ class ExperimentRunner:
         )
         
         # Check training set accuracy
-        with torch.no_grad():
-            train_acc = accuracy_score(train_labels, attack_trainer.predict(train_pairs))
-    
+        train_acc = accuracy_score(train_labels, attack_trainer.predict(train_pairs))
         print(f"Training set accuracy: {train_acc:.2%}")
 
-        test_preds = attack_trainer.predict(test_pairs)
-        
-        print(f"Test set accuracy: {100*accuracy_score(test_labels, test_preds)}%")
+        test_acc = accuracy_score(test_labels, attack_trainer.predict(test_pairs))
+        print(f"Test set accuracy: {test_acc:.2%}")
 
 def main():
+    env = gym.make("Hopper-v5")
 
     attack_trainer_config = IndividualAttackTrainerConfig(
-        action_dim=3,
+        action_dim=env.action_space.shape[0],
         T_max=100,
         device="mps",
         classification_threshold=0.5
     )
 
     config = ExperimentConfig(
-        individual_attack=True,
-        attack_trainer_config=attack_trainer_config,
-        collective_batch_size=50,
-        env=gym.make("Hopper-v5"),
-        T_max=100,
-        train_trajs=500,
-        train_seed=1,
-        external_trajs=500,
-        external_train_tolerance=1e-6,
-        external_seed=2,
-        train_output_seed=3,
-        external_output_seed=4,
-        external_random_policy=True,
-        attack_trainer_epochs=300,
-        attack_trainer_train_test_split_seed=4,
-        attack_trainer_train_test_split_test_size=0.2,
-        attack_trainer_batch_size=256,
-        data_oracle_ddpg_verbose=0,
-        data_oracle_ddpg_buffer_size=100000,
-        data_oracle_ddpg_learning_starts=1000,
-        data_oracle_ddpg_learn_timesteps=1000000,
-        trainer_oracle_bcq_epochs=150000,
-        trainer_oracle_bcq_device="cpu:0",
-        trainer_oracle_bcq_batch_size=256,
-        trainer_oracle_discount_factor=0.99,
-    )
+       individual_attack=True,
+       attack_trainer_config=attack_trainer_config,
+       collective_batch_size=50,
+       env=env,
+       T_max=100,
+       train_trajs=500,
+       train_seed=1,
+       external_trajs=500,
+       external_train_tolerance=1e-6,
+       external_seed=2,
+       train_output_seed=3,
+       external_output_seed=4,
+       external_random_policy=False,
+       attack_trainer_epochs=300,
+       attack_trainer_train_test_split_seed=4,
+       attack_trainer_train_test_split_test_size=0.2,
+       attack_trainer_batch_size=256,
+       data_oracle_ddpg_verbose=0,
+       data_oracle_ddpg_buffer_size=100000,
+       data_oracle_ddpg_learning_starts=1000,
+       data_oracle_ddpg_learn_timesteps=1000000,
+       trainer_oracle_bcq_epochs=150000,
+       trainer_oracle_bcq_device="cpu:0",
+       trainer_oracle_bcq_batch_size=256,
+       trainer_oracle_discount_factor=0.99,
+   )
+
 
     experiment_runner = ExperimentRunner(config)
 
