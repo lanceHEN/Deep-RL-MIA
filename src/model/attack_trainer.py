@@ -106,13 +106,13 @@ class AttackTrainer(ABC):
                 self.optimizer.zero_grad()
 
                 out = self.classifier(inputs)
-
+                #print(out.shape, labels.shape)
                 loss = self.criterion(out, labels)
 
                 loss.backward()
                 # Gradient clipping
-                torch.nn.utils.clip_grad_value_(
-                    self.classifier.parameters(), clip_value=self.grad_clip
+                torch.nn.utils.clip_grad_norm_(
+                    self.classifier.parameters(), max_norm=self.grad_clip
                 )
 
                 self.optimizer.step()
@@ -405,7 +405,8 @@ class CollectiveAttackClassifier(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
+        #print(x.shape)
         # x: [B, 2d_A, T, m]
         x = self.resnet(x)
-        x = self.fc(x)  # [B,]
+        x = x.squeeze(1)  # [B,]
         return self.sigmoid(x)
