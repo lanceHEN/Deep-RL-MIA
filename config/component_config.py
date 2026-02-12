@@ -16,7 +16,7 @@ class DataOracleConfig:
     """
 
     env: gym.Env
-    ddpg_verbose: int = 0
+    verbose: int = 0
     ddpg_buffer_size: int = 10000
     ddpg_learning_starts: int = 1000
     ddpg_learn_timesteps: int = 200000
@@ -29,6 +29,7 @@ class TrainerOracleConfig:
     """
 
     env: gym.Env
+    verbose: int = 0
     bcq_device: str = "cpu:0"
     bcq_batch_size: int = 100
     discount_factor: float = 0.99
@@ -42,6 +43,7 @@ class IndividualAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    verbose: int = 0
     device: str = "mps"
     classification_threshold: float = 0.5
     num_channels: List = field(default_factory=lambda: [600, 600])
@@ -61,6 +63,7 @@ class CollectiveAttackTrainerConfig:
 
     action_dim: int
     T_max: int
+    verbose: int = 0
     device: str = "mps"
     classification_threshold: float = 0.5
     dropout: float = 0.0

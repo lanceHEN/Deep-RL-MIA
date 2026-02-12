@@ -28,6 +28,7 @@ class ExperimentConfig:
 
     env: gym.Env
     T_max: int
+    verbose: int = 0
     train_trajs: int = 1000
     train_seed: int = None
     attack_trainer_train_test_split_seed: int = None
@@ -37,12 +38,10 @@ class ExperimentConfig:
     external_seed: int = None
     train_output_seed: int = None
     external_output_seed: int = None
-    external_random_policy: bool = False
     attack_trainer_epochs: int = 100
     attack_trainer_batch_size: int = 16
 
     # Data Oracle info
-    data_oracle_ddpg_verbose: int = 0
     data_oracle_ddpg_buffer_size: int = 10000
     data_oracle_ddpg_learning_starts: int = 1000
     data_oracle_ddpg_learn_timesteps: int = 200000

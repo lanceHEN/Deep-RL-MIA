@@ -158,9 +158,9 @@ class DataFormatter:
             )  # [T_max, action_dim]
 
             traj_actions = np.swapaxes(
-                traj_actions, 0, 1
+                traj_actions, 0, 1 # [action_dim, T_max]
             )  # Swapaxes allows use with 2-d and 3-d
-            output_traj_actions = np.swapaxes(output_traj_actions, 0, 1)
+            output_traj_actions = np.swapaxes(output_traj_actions, 0, 1) # [action_dim, T_max]
 
             # Vertically stack traj and output traj to get the [2*action_dim, T_max,...] shape
             stacked_trajs.append(np.vstack((traj_actions, output_traj_actions)))

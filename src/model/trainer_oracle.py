@@ -66,7 +66,7 @@ class TrainerOracle:
         rewards = []
         terminals = []
         for traj in trajectories:
-            observations.append(traj["states"])
+            observations.append(traj["states"][:-1]) # Exclude last one
             actions.append(traj["actions"])
             rewards.append(traj["rewards"])
             terminals.append(traj["terminals"])
@@ -92,10 +92,12 @@ class TrainerOracle:
         # Build BCQ from config
         self.bcq = config.create(device=self.config.bcq_device)
 
-        print(f"Training BCQ for {epochs} epochs...")
+        if self.config.verbose > 0:
+            print(f"Training BCQ for {epochs} epochs...")
         self.bcq.fit(dataset, n_steps=epochs, show_progress=True)
 
-        print("BCQ training complete!")
+        if self.config.verbose > 0:
+            print("BCQ training complete!")
 
     def get_output_trajectories(
         self, qpos: np.ndarray, qvel: np.ndarray, T_max: int, seed: int = None
@@ -130,8 +132,9 @@ class TrainerOracle:
 
         if seed is not None:
             self.env.reset(seed=seed)
-            
-        print("Fetching output trajectories")
+        
+        if self.config.verbose > 0:
+            print("Fetching output trajectories")
 
         trajectories = []
 
@@ -187,5 +190,7 @@ class TrainerOracle:
                     "qvel": one_qvel # [vel_dim,]
                 }
             )
-        print("Finished fetching output trajectories")
+        
+        if self.config.verbose > 0:
+            print("Finished fetching output trajectories")
         return trajectories

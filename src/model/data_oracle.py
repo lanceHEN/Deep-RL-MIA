@@ -38,17 +38,20 @@ class DataOracle:
         self.policy = DDPG(
             "MlpPolicy",
             self.env,
-            verbose=self.config.ddpg_verbose,
+            verbose=self.config.verbose,
             buffer_size=self.config.ddpg_buffer_size,
             learning_starts=self.config.ddpg_learning_starts,
         )
 
         # Learn for some steps.
-        print("Learning DDPG policy for data oracle.")
+        
+        if self.config.verbose > 0:
+            print("Learning DDPG policy for data oracle.")
         self.policy.learn(
             total_timesteps=self.config.ddpg_learn_timesteps, progress_bar=True
         )
-        print("Finished learning DDPG policy")
+        if self.config.verbose > 0:
+            print("Finished learning DDPG policy")
         
     def _gen_trajectory(self, T_max: int, random_policy: bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -117,7 +120,8 @@ class DataOracle:
                 a 'qpos' key mapping to initial state position, and a 'qvel' key
                 mapping to initial state velocity.
         """
-        print(f"Generating {n_trajectories} training trajectories.")
+        if self.config.verbose > 0:
+            print(f"Generating {n_trajectories} training trajectories.")
         if seed is not None:  # For reuse
             self.env.reset(seed=seed)
             np.random.seed(seed)
@@ -142,8 +146,8 @@ class DataOracle:
                     "qvel": qvel # [vel_dim,]
                 }
             )
-
-        print("Finished generating training trajectories.")
+        if self.config.verbose > 0:
+            print("Finished generating training trajectories.")
         return trajectories
 
     def collect_external_trajectories(
@@ -153,7 +157,7 @@ class DataOracle:
         T_max: int,
         train_tolerance: float = 1e-6,
         seed: int = None,
-        random_policy: bool = False
+        random_traj_ratio: float = 0.0
     ) -> List[Dict[str, np.ndarray]]:
         """
         Performs the same as collect_training_trajectories, except it also
@@ -169,7 +173,7 @@ class DataOracle:
                 between and external and training trajectory for the external
                 to be a duplicate.
             seed (int): Optional random seed for reproducibility.
-            random_policy (bool): If true, uses a random policy instead of the DDPG policy.
+            random_traj_ratio (float): Ratio of trajectories to generate with random policy.
 
         Returns:
             List[Dict[str, np.ndarray]]: List of trajectories different from
@@ -181,15 +185,25 @@ class DataOracle:
                 a 'qpos' key mapping to initial state position, and a 'qvel' key
                 mapping to initial state velocity.
         """
-        print(f"Generating {n_trajectories} external trajectories.")
+        if self.config.verbose > 0:
+            print(f"Generating {n_trajectories} external trajectories.")
         if seed is not None:  # For reuse
             self.env.reset(seed=seed)
             np.random.seed(seed)
 
         trajectories = []
         
+        n_random = int(n_trajectories * random_traj_ratio)
+        random_count = 0
+        
         while len(trajectories) < n_trajectories:
+            if random_count < n_random:
+                random_policy = True
+            else:
+                random_policy = False
+            
             states, actions, rewards, qpos, qvel = self._gen_trajectory(T_max, random_policy=random_policy)
+                
                 
             skip = False
             # Check not in train_trajectories
@@ -197,7 +211,8 @@ class DataOracle:
                 if len(train_traj["actions"]) == len(actions):
                     if np.allclose(actions, train_traj["actions"], atol=train_tolerance) and np.allclose(states, train_traj["states"], atol=train_tolerance):
                         skip = True
-                        print("Skipping generated trajectory because it is identical to a training one")
+                        if self.config.verbose > 0:
+                            print("Skipping generated trajectory because it is identical to a training one")
                         break
                         
             if skip:
@@ -218,6 +233,10 @@ class DataOracle:
                     "qvel": qvel # [vel_dim,]
                 }
             )
+            
+            if random_policy:
+                random_count += 1
 
-        print("Finished generating external trajectories.")
+        if self.config.verbose > 0:
+            print("Finished generating external trajectories.")
         return trajectories

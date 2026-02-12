@@ -48,6 +48,16 @@ class AttackTrainer(ABC):
         self.action_dim = action_dim
         self.T_max = T_max
         self.classification_threshold = classification_threshold
+        
+    @property
+    @abstractmethod
+    def device(self) -> str:
+        pass
+    
+    @property
+    @abstractmethod
+    def verbose(self) -> int:
+        pass
 
     @property
     @abstractmethod
@@ -91,7 +101,8 @@ class AttackTrainer(ABC):
             epochs (int): Number of epochs to train the classifier.
             batch_size (int): Batch size for stochastic gradient descent.
         """
-        print("Training attack classifier")
+        if self.verbose > 0:
+            print("Training attack classifier")
         train_loader = self._make_dataloader(
             stacked_trajectories, train_labels, batch_size
         )
@@ -118,9 +129,10 @@ class AttackTrainer(ABC):
                 self.optimizer.step()
                 
             self.scheduler.step()
-                
-        print("Finished training attack classifier")
 
+        if self.verbose > 0:
+            print("Finished training attack classifier")
+    
     @torch.no_grad()
     def predict(self, stacked_trajectories: np.ndarray) -> np.ndarray:
         """
@@ -183,6 +195,8 @@ class IndividualAttackTrainer(AttackTrainer):
         self.config = config
         
         self._device = self.config.device
+        
+        self._verbose = self.config.verbose
 
         self._classifier = IndividualAttackClassifier(
             self.config.action_dim,
@@ -202,6 +216,10 @@ class IndividualAttackTrainer(AttackTrainer):
     @property
     def device(self):
         return self._device
+    
+    @property
+    def verbose(self):
+        return self._verbose
 
     @property
     def classifier(self) -> nn.Module:
@@ -226,6 +244,10 @@ class IndividualAttackTrainer(AttackTrainer):
     @device.setter
     def device(self, device):
         self._device = device
+        
+    @verbose.setter
+    def verbose(self, verbose):
+        self._verbose = verbose
 
     @classifier.setter
     def classifier(self, clf):
@@ -277,6 +299,8 @@ class CollectiveAttackTrainer(AttackTrainer):
         self.config = config
         
         self._device = self.config.device
+        
+        self._verbose = self.config.verbose
 
         self._classifier = CollectiveAttackClassifier(self.config.action_dim).to(self.device)
         self._criterion = nn.BCELoss()
@@ -291,6 +315,10 @@ class CollectiveAttackTrainer(AttackTrainer):
     @property
     def device(self):
         return self._device
+    
+    @property
+    def verbose(self):
+        return self._verbose
 
     @property
     def classifier(self) -> nn.Module:
@@ -315,6 +343,10 @@ class CollectiveAttackTrainer(AttackTrainer):
     @device.setter
     def device(self, device):
         self._device = device
+        
+    @verbose.setter
+    def verbose(self, verbose):
+        self._verbose = verbose
 
     @classifier.setter
     def classifier(self, clf):
