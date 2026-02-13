@@ -11,6 +11,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import torch
+from matplotlib import pyplot as plt
 
 root_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(root_dir))
@@ -51,20 +52,12 @@ class ExperimentRunner:
         """
         self.config = config
         
-    def test_external_random_ratios(self, external_random_ratios: List[float] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]):
+    def _first_experiment_half(self):
         """
-        Tests different ratios of random trajectories in the external set,
-        and plots test accuracy over them.
+        Initializes and trains data oracle and model training oracle, returning
+        them plus the training trajectories.
         """
-        for ratio in external_random_ratios:
-            print(f"\nTesting external random ratio: {ratio:.2f}")
-            self.run_experiment(ratio)
-
-    def run_experiment(self, external_random_ratio: float = 0.0) -> float:
-        """
-        Runs a particular experiment with the given config, external random ratio, and verbose setting. Returns test accuracy.
-        """
-
+        
         # Initialize Data Oracle
         data_oracle = DataOracle(
             DataOracleConfig(
@@ -134,8 +127,14 @@ class ExperimentRunner:
                 total_reward += ep_reward
     
             bcq_avg_reward = total_reward / 10
-            print(f"BCQ Average Reward: {bcq_avg_reward:.2f}")
-
+            
+        return data_oracle, trainer_oracle, train_trajectories
+    
+    def _second_experiment_half(self, data_oracle: DataOracle, trainer_oracle: TrainerOracle, train_trajectories: List[dict], external_random_ratio: float = 0.0):
+        """
+        Completes the second half of the experiment, given trained data and trainer oracles,
+        returning the attack test accuracy.
+        """
         # Get some external trajectories - use train_trajectories to ensure different.
         external_trajectories = data_oracle.collect_external_trajectories(
             train_trajectories, self.config.external_trajs, self.config.T_max, self.config.external_train_tolerance, self.config.external_seed,
@@ -385,11 +384,46 @@ class ExperimentRunner:
             print(f"Test set accuracy: {test_acc:.2%}")
         
         return test_acc
+        
+        
+    def test_external_random_ratios(self, external_random_ratios: List[float] = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]):
+        """
+        Tests different ratios of random trajectories in the external set,
+        and plots test accuracy over them.
+        """
+        test_accuracies = []
+        
+        # Generate data oracle, trainer oracle, and training trajectories once
+        data_oracle, trainer_oracle, train_trajectories = self._first_experiment_half()
+        
+        for ratio in external_random_ratios:
+            print(f"\nTesting external random ratio: {ratio:.2f}")
+            test_acc = self._second_experiment_half(data_oracle, trainer_oracle, train_trajectories,
+                                                    external_random_ratio=ratio)
+            test_accuracies.append(test_acc)
+            
+        print(f"Test accuracies: {test_accuracies}")
+            
+        plt.plot(external_random_ratios, test_accuracies)
+        plt.xlabel("External Random Ratio")
+        plt.ylabel("Attack Test Accuracy")
+        plt.title("Attack Test Accuracy vs External Random Ratio")
+        plt.grid()
+        plt.show()
+
+    def run_experiment(self, external_random_ratio: float = 0.0) -> float:
+        """
+        Runs a particular experiment with the given config, external random ratio, and verbose setting. Returns test accuracy.
+        """
+        
+        data_oracle, trainer_oracle, train_trajectories = self._first_experiment_half()
+
+        return self._second_experiment_half(data_oracle, trainer_oracle, train_trajectories, external_random_ratio)
 
 def main():
     env = gym.make("Hopper-v5")
     T_max = 100
-    verbose = 1
+    verbose = 0
 
     attack_trainer_config = IndividualAttackTrainerConfig(
         action_dim=env.action_space.shape[0],
@@ -401,36 +435,38 @@ def main():
 
 
     config = ExperimentConfig(
-       individual_attack=False,
+       individual_attack=True,
        attack_trainer_config=attack_trainer_config,
        collective_batch_size=50,
        env=env,
        T_max=T_max,
        verbose=verbose,
-       train_trajs=100,
+       train_trajs=500,
        train_seed=1,
-       external_trajs=100,
+       external_trajs=500,
        external_train_tolerance=1e-6,
        external_seed=2,
        train_output_seed=3,
        external_output_seed=4,
-       attack_trainer_epochs=1,
+       attack_trainer_epochs=300,
        attack_trainer_train_test_split_seed=4,
        attack_trainer_train_test_split_test_size=0.2,
        attack_trainer_batch_size=256,
        data_oracle_ddpg_buffer_size=100000,
-       data_oracle_ddpg_learning_starts=1,
-       data_oracle_ddpg_learn_timesteps=100,
-       trainer_oracle_bcq_epochs=100,
+       data_oracle_ddpg_learning_starts=1000,
+       data_oracle_ddpg_learn_timesteps=1000000,
+       trainer_oracle_bcq_epochs=150000,
        trainer_oracle_bcq_device="cpu:0",
        trainer_oracle_bcq_batch_size=256,
        trainer_oracle_discount_factor=0.99,
    )
 
+
+
     
     experiment_runner = ExperimentRunner(config)
     
-    experiment_runner.run_experiment(0.5)
+    experiment_runner.test_external_random_ratios()
     
 if __name__ == "__main__":
     main()
